@@ -1,8 +1,8 @@
 {
   "name": "history-for-claude-code",
   "displayName": "History for Claude Code",
-  "description": "Unofficial. Search, reuse and resume every Claude Code conversation on your machine, from any workspace. Local-only.",
-  "version": "0.1.1",
+  "description": "Search, reuse and resume every Claude Code conversation on your machine, from any workspace. Local-only. Community extension, not affiliated with Anthropic.",
+  "version": "0.1.2",
   "publisher": "jamesmithiga",
   "license": "MIT",
   "repository": {

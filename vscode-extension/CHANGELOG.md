@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Reworded the Marketplace description: it now leads with what the extension does and ends with "Community extension, not affiliated with Anthropic."
+
 ## 0.1.1
 
 Fixes found by running the test suite on Windows, Linux and macOS.
