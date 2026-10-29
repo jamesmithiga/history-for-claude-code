@@ -31,6 +31,8 @@ test("buildWebviewHtml injects CSP, nonce'd bridge and webview URIs", () => {
   assert.match(html, /Content-Security-Policy" content="default-src 'none'; style-src vscode-resource: 'unsafe-inline'; script-src 'nonce-abc123'/);
   assert.match(html, /<script nonce="abc123" src="vscode-resource:\/app.js"><\/script>/);
   assert.match(html, /window\.cchHost/);
+  // Link-buttons (e.g. "Open folder in VS Code") must get the same themed background as real buttons.
+  assert.match(html, /button, a\.btn \{ background: var\(--vscode-input-background\)/);
   assert.ok(!html.includes('href="app.css"') && !html.includes('src="app.js"'));
   // A "</script>" inside the initial query must not close the bridge script early.
   assert.strictEqual(html.split("</script>").length - 1, 2);

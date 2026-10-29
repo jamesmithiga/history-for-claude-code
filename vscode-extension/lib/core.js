@@ -48,7 +48,7 @@ const THEME_CSS = `
 }
 body { font-size: var(--vscode-font-size, 13px); }
 button.primary { color: var(--vscode-button-foreground); }
-input, select, button { background: var(--vscode-input-background); color: var(--vscode-input-foreground); }
+input, select, button, a.btn { background: var(--vscode-input-background); color: var(--vscode-input-foreground); }
 button.primary { background: var(--vscode-button-background); }
 `;
 
