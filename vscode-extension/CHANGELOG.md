@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5
+
+- A session's actions (Continue in chat, Bring into this chat, Terminal, Archive, Details) sit on their own row under the title, aligned left.
+- **Open folder in VS Code** is a button like the others instead of a text link.
+- Reworked the walkthroughs so each shows something different: the headline demo goes from search to **Continue in chat**, and new ones cover filters and browsing the session list.
+
 ## 0.2.4
 
 - Every feature on the Marketplace page now has a short animated walkthrough instead of a still screenshot.

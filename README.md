@@ -2,7 +2,7 @@
 
 Search, browse and reuse **every** Claude Code conversation on your machine, whichever repository you have open.
 
-![Searching every project, opening a match in context, then listing the sessions that contain it](docs/media/demo.gif)
+![Searching every project, opening the fix from another project, and continuing it in Claude's chat](docs/media/demo.gif)
 
 Claude Code stores each session under a directory named after the folder it ran in, and its resume pickers only show the current folder's history. This app indexes all of them into one local SQLite full-text index. You can reach that index three ways:
 

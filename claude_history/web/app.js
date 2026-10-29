@@ -176,7 +176,7 @@ function select(i, reveal = true) {
 function sessionHeader(s, extra = "") {
   const title = s.title || s.id;
   const open = lsGet("cch.details") === "1";
-  const cwdLink = s.cwd && s.cwd_exists ? `<a href="${vscodeLink(s.cwd)}">Open folder in VS Code</a>` : "";
+  const cwdLink = s.cwd && s.cwd_exists ? `<a class="btn" href="${vscodeLink(s.cwd)}" title="${esc(s.cwd)}">Open folder in VS Code</a>` : "";
   const pills = [
     s.cwd && !s.cwd_exists ? `<span class="pill warn">directory gone</span>` : "",
     s.source_missing ? `<span class="pill warn" title="Claude Code deleted the original transcript; the index preserved it">transcript deleted</span>` : "",

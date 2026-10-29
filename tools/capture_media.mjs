@@ -18,7 +18,8 @@ import { fileURLToPath } from "node:url";
 
 const [base = "http://127.0.0.1:8798", outDir = "docs/media", framesRoot = path.join(os.tmpdir(), "cch-frames"),
   ...only] = process.argv.slice(2);
-const W = 1360, H = 820, PORT = 9333, FRAME_MS = 120;
+// A fresh port per run: a browser left over from an interrupted run must never be reused.
+const W = 1360, H = 820, PORT = 9300 + Math.floor(Math.random() * 600), FRAME_MS = 120;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const browser = [
   process.env.BROWSER,
@@ -36,10 +37,12 @@ const proc = spawn(browser, ["--headless=new", `--remote-debugging-port=${PORT}`
   `--window-size=${W},${H}`, "--hide-scrollbars", "--force-dark-mode", "--no-first-run", "about:blank"], { stdio: "ignore" });
 
 let target;
+const startedAt = Date.now();
 for (let i = 0; i < 50 && !target; i++) {
   try { target = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()).find(t => t.type === "page"); }
   catch { await sleep(200); }
 }
+if (!target) throw new Error(`browser did not start (port ${PORT}) after ${Date.now() - startedAt} ms`);
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise(r => ws.addEventListener("open", r, { once: true }));
 let seq = 0;
@@ -156,28 +159,44 @@ fs.mkdirSync(outDir, { recursive: true });
 const firstResult = `(document.querySelectorAll("#results .item")[0])`;
 const secondResult = `(document.querySelectorAll("#results .item")[1])`;
 
-// Hero: search across projects, open a match, see which sessions contain it.
+// Native <select> popups don't render in headless screenshots: point at the
+// control, ripple, and switch the value the way a user's choice would.
+async function choose(selector, optionText, after = 1200) {
+  await moveTo(selector);
+  await hold(200);
+  const ok = await evaluate(`(() => { const s = document.querySelector(${JSON.stringify(selector)});
+    const o = [...s.options].find(o => o.textContent.trim().startsWith(${JSON.stringify(optionText)}));
+    if (!o) return false; s.value = o.value; window.__cursor.ripple(${mouse.x}, ${mouse.y});
+    s.dispatchEvent(new Event("change")); return true; })()`);
+  if (!ok) throw new Error(`option not found: ${optionText}`);
+  await hold(after);
+}
+
+// Hero: one search finds the fix in another project, then continue it in Claude's chat.
 await record("demo", async () => {
   await go("/");
   await hold(900);
   await click("#q", 200);
   await type("retry backoff");
-  await hold(1200);
-  await click(secondResult, 1400);
-  await click(`.seg [data-view=sessions]`, 1300);
-  await click(`(document.querySelectorAll("#sessions .item")[0])`, 2200);
+  await hold(1300);
+  await click(secondResult, 1100);
+  await moveTo(`(document.querySelector("#detail .msg.hit"))`);
+  await hold(900);
+  await click("[data-act=chat]", 2400);
 });
 
-// Search: type, results from several projects, step through them.
+// Filters: narrow a search by message type and project, then an exact phrase.
 await record("search", async () => {
-  await go("/");
-  await hold(700);
+  await go(`/?q=migration`, 1800);
+  await hold(1000);
+  await click("#filtersBtn", 700);
+  await click(`(document.querySelector('#fRoles input[value=tool_use]'))`, 500);
+  await click(`(document.querySelector('#fRoles input[value=tool_result]'))`, 1100);
+  await choose("#fProject", "payments-api", 1300);
   await click("#q", 200);
-  await type("retry backoff");
-  await hold(1400);
-  await moveTo(`(document.querySelector("#detail .msg.hit"))`);
-  await hold(1200);
-  await click(secondResult, 1800);
+  await evaluate(`document.querySelector("#q").select()`);
+  await type('"duplicate column"', 60);
+  await hold(2200);
 });
 
 // Sessions containing matches, ranked with counts.
@@ -190,15 +209,15 @@ await record("sessions-matches", async () => {
   await click(`(document.querySelectorAll("#sessions .item")[1])`, 2200);
 });
 
-// History: open a session, the continue options, details.
+// History: sort and filter the session list, open one, bring it into the current chat.
 await record("history", async () => {
   await go("/");
   await hold(800);
-  await click(`(document.querySelectorAll("#sessions .item")[1])`, 1400);
-  await click(`[data-act=more]`, 1500);
-  await moveTo(`[data-act=bring]`);
-  await hold(900);
-  await click(`[data-act=chat]`, 2200);
+  await choose("#ssort", "Most messages", 1200);
+  await choose("#fProject", "shopfront", 1200);
+  await click(`(document.querySelectorAll("#sessions .item")[0])`, 1300);
+  await click("[data-act=more]", 1400);
+  await click("[data-act=bring]", 2600);
 });
 
 // Context pack: add two messages, describe the task, build, send to chat.
@@ -236,6 +255,8 @@ await record("archive", async () => {
 });
 
 ws.close();
-proc.kill();
+// Stop Edge's whole process tree; killing only the parent leaves helpers holding the port.
+if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(proc.pid), "/T", "/F"], { stdio: "ignore" });
+else proc.kill();
 await sleep(500);
 fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });

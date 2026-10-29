@@ -6,7 +6,7 @@
 
 Claude Code keeps a transcript of every session, but its history list only shows conversations from the folder you have open. When you switch repositories, earlier solutions, decisions and debugging sessions from other projects drop out of view. This extension indexes **all** of them locally, so your history isn't limited to the repository that's open.
 
-![Searching every project for "retry backoff", opening a match in context, then listing the sessions that contain it](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/demo.gif)
+![Searching every project for "retry backoff", opening the fix from another project, and continuing it in Claude's chat](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/demo.gif)
 
 ## Features
 
@@ -17,7 +17,7 @@ Claude Code keeps a transcript of every session, but its history list only shows
 - Each match opens with the conversation around it.
 - **Search History for Selection** (`Ctrl+Alt+Shift+H`, or right-click): select an error message or function name and find where you've seen it before.
 
-![Typing a search and stepping through matches from two projects, each shown in its conversation](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/search.gif)
+![Narrowing a search with filters: hiding tool output, picking a project, then an exact phrase](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/search.gif)
 
 - Switch to **Sessions** to see which conversations contain matches, ranked, with a count on each.
 
@@ -28,7 +28,7 @@ Claude Code keeps a transcript of every session, but its history list only shows
 - **Bring into this chat** starts a new Claude chat in your *current* workspace, pre-filled to load the old session and carry on. It works even after Claude Code has deleted the original transcript.
 - **Terminal** runs `claude --resume` in an integrated terminal, in the session's original folder.
 
-![Opening a past session, expanding its details, and continuing it in Claude's chat](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/history.gif)
+![Sorting and filtering the session list, opening a session, and bringing it into the current chat](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/history.gif)
 
 **Archive and delete**
 - **Archive** sessions you don't need to see: they disappear from search, lists and Claude's history searches, and can be unarchived any time.
