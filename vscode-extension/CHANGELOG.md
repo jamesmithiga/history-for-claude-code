@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1
+
+Fixes found by running the test suite on Windows, Linux and macOS.
+
+- **The MCP server now starts on Windows when your user folder contains a space** (for example `C:\Users\First Last`). Claude Code split the launch command at the space, so "Bring into this chat" and Claude's own history search couldn't work. Run **Claude History: Register MCP Server for Claude Code** again to apply the fix.
+- The MCP server syncs the index before answering its first question, instead of sometimes searching a stale index right after it starts.
+- Faster backend startup on macOS: it no longer does a slow network lookup when starting the local server.
+- Project names are now correct when a transcript recorded a path in another operating system's format.
+
 ## 0.1.0
 
 First public release.
