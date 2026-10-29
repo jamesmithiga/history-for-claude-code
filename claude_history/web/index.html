@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude History</title>
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23c96442'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top">
+  <div class="brand" title="Claude History">Claude&nbsp;History</div>
+  <form id="searchForm" class="searchbar" autocomplete="off">
+    <input id="q" type="search" placeholder='Search all sessions: keywords, "exact phrase", func_name, -exclude, prefix*' aria-label="Search">
+    <select id="mode" title="Search mode" aria-label="Search mode">
+      <option value="fts">Keywords</option>
+      <option value="substring">Literal</option>
+    </select>
+    <select id="sort" title="Sort" aria-label="Sort">
+      <option value="relevance">Relevance</option>
+      <option value="newest">Newest</option>
+      <option value="oldest">Oldest</option>
+    </select>
+  </form>
+  <div id="status" class="status" title="Index status"><span class="dot"></span><span id="statusText">…</span>
+    <button id="syncBtn" class="ghost icon" title="Sync now" aria-label="Sync now">&#x21bb;</button>
+  </div>
+</header>
+
+<nav class="bar">
+  <div class="tabs" role="tablist">
+    <button data-tab="search" class="active" title="Search (1)">Search</button>
+    <button data-tab="sessions" title="Sessions (2)">Sessions</button>
+    <button data-tab="pack" title="Context pack (3)">Pack <span id="packCount" class="badge">0</span></button>
+    <button data-tab="health" title="Index health (4)">Health</button>
+  </div>
+  <div class="barright">
+    <select id="fProject" title="Project" aria-label="Project"><option value="">All projects</option></select>
+    <button id="filtersBtn" class="ghost" aria-expanded="false" aria-controls="filters" title="More filters">Filters <span id="filterCount" class="badge" hidden></span></button>
+  </div>
+</nav>
+<div class="filters" id="filters" hidden>
+  <div class="roles" id="fRoles" title="Message types">
+    <label><input type="checkbox" value="user" checked>User</label>
+    <label><input type="checkbox" value="assistant" checked>Claude</label>
+    <label><input type="checkbox" value="tool_use" checked>Tool calls</label>
+    <label><input type="checkbox" value="tool_result" checked>Tool output</label>
+    <label><input type="checkbox" value="thinking">Thinking</label>
+    <label><input type="checkbox" value="memory" checked>Memory</label>
+  </div>
+  <label class="field">From<input id="fFrom" type="date"></label>
+  <label class="field">To<input id="fTo" type="date"></label>
+  <input id="fFile" type="text" placeholder="File path contains…" title="Referenced file path" aria-label="File path contains">
+  <label class="toggle" title="Include subagent transcripts"><input id="fSide" type="checkbox" checked>Subagents</label>
+  <button id="fClear" class="ghost">Clear filters</button>
+</div>
+
+<main>
+  <section id="tab-search" class="tab active split">
+    <div class="list" id="results" tabindex="-1">
+      <div class="empty">Search every Claude Code session on this machine, regardless of which repo is open.<br><br>
+        <span class="muted">Try an error message, a function name, a filename, or a decision you remember making.</span></div>
+    </div>
+    <div class="resizer" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+    <div class="detail" id="detail"><div class="empty muted">Select a result to see it in context.</div></div>
+  </section>
+
+  <section id="tab-sessions" class="tab split">
+    <div class="list">
+      <div class="listhead">
+        <input id="sq" type="search" placeholder="Filter sessions by title, prompt or id…">
+        <select id="ssort"><option value="newest">Last active</option><option value="oldest">Oldest</option>
+          <option value="messages">Most messages</option><option value="title">Title</option></select>
+      </div>
+      <div id="sessions"></div>
+    </div>
+    <div class="resizer" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+    <div class="detail" id="sdetail"><div class="empty muted">Select a session.</div></div>
+  </section>
+
+  <section id="tab-pack" class="tab">
+    <div class="pack">
+      <div class="packcfg">
+        <h2>Context pack</h2>
+        <p class="muted">Collect excerpts from any project, then copy one attributed, token-budgeted Markdown block into a new Claude Code conversation.</p>
+        <label>Current task (optional)<input id="pTask" type="text" placeholder="e.g. add retry logic to the export job"></label>
+        <div class="row">
+          <label>Token budget<input id="pBudget" type="number" min="500" step="500" value="6000"></label>
+          <label class="toggle"><input id="pTools" type="checkbox" checked>Include tool calls/output</label>
+          <label class="toggle"><input id="pRedact" type="checkbox" checked>Redact likely secrets</label>
+        </div>
+        <div id="pItems" class="pitems"></div>
+        <div class="row">
+          <button id="pBuild" class="primary">Build pack</button>
+          <button id="pClear" class="ghost">Clear</button>
+        </div>
+      </div>
+      <div class="packout">
+        <div class="row"><span id="pMeta" class="muted"></span><span class="spacer"></span>
+          <button id="pCopy" disabled>Copy</button><button id="pSave" disabled>Save .md</button><button id="pDownload" disabled>Download</button></div>
+        <pre id="pPreview" class="preview muted">Build the pack to preview it here.</pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-health" class="tab"><div id="health" class="health"></div></section>
+</main>
+
+<div id="toast" class="toast" role="status"></div>
+<script src="app.js"></script>
+</body>
+</html>

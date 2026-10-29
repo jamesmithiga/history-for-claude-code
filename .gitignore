@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+# Built / bundled at package time
+vscode-extension/python/
+vscode-extension/dist/
+node_modules/
+# Generated from YOUR real history by tests/acceptance_real.py — never commit
+docs/acceptance-results.md

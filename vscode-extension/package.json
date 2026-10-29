@@ -1,0 +1,134 @@
+{
+  "name": "history-for-claude-code",
+  "displayName": "History for Claude Code",
+  "description": "Unofficial. Search, reuse and resume every Claude Code conversation on your machine, from any workspace. Local-only.",
+  "version": "0.1.0",
+  "publisher": "jamesmithiga",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jamesmithiga/history-for-claude-code.git",
+    "directory": "vscode-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/jamesmithiga/history-for-claude-code/issues"
+  },
+  "homepage": "https://github.com/jamesmithiga/history-for-claude-code#readme",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#2b1d17",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "qna": "marketplace",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "history",
+    "search",
+    "resume",
+    "context",
+    "mcp",
+    "anthropic"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeHistory.open",
+        "title": "Search Claude History",
+        "category": "Claude History",
+        "icon": "$(history)"
+      },
+      {
+        "command": "claudeHistory.searchSelection",
+        "title": "Search History for Selection",
+        "category": "Claude History"
+      },
+      {
+        "command": "claudeHistory.resumeSession",
+        "title": "Continue a Past Session…",
+        "category": "Claude History"
+      },
+      {
+        "command": "claudeHistory.sync",
+        "title": "Sync Index Now",
+        "category": "Claude History"
+      },
+      {
+        "command": "claudeHistory.installMcp",
+        "title": "Register MCP Server for Claude Code",
+        "category": "Claude History"
+      },
+      {
+        "command": "claudeHistory.showLog",
+        "title": "Show Log",
+        "category": "Claude History"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "claudeHistory.open",
+        "key": "ctrl+alt+h",
+        "mac": "cmd+alt+h"
+      },
+      {
+        "command": "claudeHistory.searchSelection",
+        "key": "ctrl+alt+shift+h",
+        "mac": "cmd+alt+shift+h",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "claudeHistory.searchSelection",
+          "when": "editorHasSelection",
+          "group": "navigation@90"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Claude History",
+      "properties": {
+        "claudeHistory.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Python 3.11+ executable used to run the bundled backend. Empty = 'python' (Windows) or 'python3'."
+        },
+        "claudeHistory.port": {
+          "type": "number",
+          "default": 8765,
+          "description": "Local port of the backend (127.0.0.1 only). Shared by all VS Code windows and the browser UI."
+        },
+        "claudeHistory.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the claude executable for resuming sessions. Empty = the copy bundled with the Claude Code extension, else 'claude' on PATH."
+        },
+        "claudeHistory.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the backend when VS Code starts, so the index keeps syncing in the background."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "bundle-python": "node scripts/bundle-python.js",
+    "test": "node --test test/*.test.js",
+    "test:integration": "npm run bundle-python && node test/integration/run.js",
+    "package": "npm run bundle-python && npx --yes @vscode/vsce@3.6.0 package --no-dependencies -o dist/history-for-claude-code.vsix"
+  }
+}

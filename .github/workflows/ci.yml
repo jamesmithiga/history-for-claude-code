@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Python tests
+        run: python -m unittest discover -s tests -v
+      - name: Extension tests
+        working-directory: vscode-extension
+        run: |
+          npm run bundle-python
+          npm test
+      - name: Package
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: vscode-extension
+        run: npm run package
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: vsix
+          path: vscode-extension/dist/*.vsix

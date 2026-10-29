@@ -1,0 +1,30 @@
+# Copy to ~/.claude-history/config.toml (or point CLAUDE_HISTORY_CONFIG at it).
+# Every key is optional; the values below are the defaults.
+
+# Where the index, logs and saved context packs live.
+# data_dir = "~/.claude-history"
+
+# Claude Code config directories to read (each must contain a projects/ folder).
+# Defaults to $CLAUDE_CONFIG_DIR or ~/.claude. Add more, e.g. a copy from another machine.
+# claude_dirs = ["~/.claude"]
+
+# Web app. Keep host on 127.0.0.1 unless you understand the exposure.
+host = "127.0.0.1"
+port = 8765
+
+# Seconds between background syncs while the web app is running.
+sync_interval = 20
+
+# The MCP server re-syncs before answering if its last sync is older than this.
+mcp_sync_max_age = 30
+
+# Per-block truncation in the index (characters).
+max_text_chars = 60000
+max_tool_result_chars = 6000
+max_tool_input_chars = 3000
+
+# Index Claude Code's per-project memory/*.md files.
+index_memory_files = true
+
+# Redact likely secrets in context packs by default (the index keeps originals).
+redact_packs = true

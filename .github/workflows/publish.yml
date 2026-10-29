@@ -1,0 +1,48 @@
+name: Publish extension
+
+# Runs when you publish a GitHub release whose tag matches the extension version (e.g. v0.1.1).
+# VS Marketplace: Trusted Publishing (OIDC) — no stored token. Add a Trusted Publishing policy
+#   on your publisher page for this repository and workflow file "publish.yml".
+# Open VSX: needs the repository secret OVSX_PAT; skipped if it isn't set.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Tests
+        run: |
+          python -m unittest discover -s tests
+          cd vscode-extension && npm run bundle-python && npm test
+      - name: Check tag matches package.json version
+        if: github.event_name == 'release'
+        working-directory: vscode-extension
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "${GITHUB_REF_NAME#v}" = "$v" ] || { echo "Tag $GITHUB_REF_NAME does not match version $v"; exit 1; }
+      - name: Package
+        working-directory: vscode-extension
+        run: npm run package
+      - name: Publish to VS Marketplace
+        working-directory: vscode-extension
+        run: npx --yes @vscode/vsce@latest publish --oidc --packagePath dist/history-for-claude-code.vsix
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        working-directory: vscode-extension
+        run: npx --yes ovsx publish dist/history-for-claude-code.vsix -p "$OVSX_PAT"

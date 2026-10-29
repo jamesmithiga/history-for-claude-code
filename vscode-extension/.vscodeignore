@@ -1,0 +1,7 @@
+test/**
+scripts/**
+dist/**
+node_modules/**
+**/__pycache__/**
+**/*.pyc
+.gitignore
