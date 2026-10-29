@@ -5,12 +5,14 @@
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
   --sans: system-ui, "Segoe UI", -apple-system, sans-serif;
   --list-w: 40%;
+  --accent-strong: #a8461f; --on-accent: #ffffff;  /* primary buttons: >= 4.5:1 */
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #1a1917; --panel: #22211e; --sunken: #2a2925; --border: #393731; --text: #e9e6df;
     --muted: #9b968b; --accent: #e07a52; --accent-weak: #3b2a22; --mark: #6b5513; --mark-text: #fff4cc;
     --user: #7fb0ea; --assistant: #e8916d; --tool: #9ca3af; --memory: #b39ae6;
+    --accent-strong: #e07a52; --on-accent: #1d0f08; --warn: #d6a33a;
   }
 }
 * { box-sizing: border-box; }
@@ -21,7 +23,7 @@ button, input, select { font: inherit; color: inherit; }
 button { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary { background: var(--accent-strong); border-color: var(--accent-strong); color: var(--on-accent); }
 button.ghost { background: transparent; }
 button.icon { padding: 2px 7px; font-size: 14px; line-height: 1.2; }
 input[type=search], input[type=text], input[type=number], input[type=date], select {
@@ -54,6 +56,7 @@ kbd { font: 10px var(--mono); border: 1px solid var(--border); border-radius: 3p
 .tabs > button.active { color: var(--text); border-bottom-color: var(--accent); }
 .barright { margin-left: auto; display: flex; gap: 6px; align-items: center; padding: 4px 0; min-width: 0; }
 .barright select { max-width: 220px; padding: 3px 6px; font-size: 12.5px; }
+body:not([data-tab=history]) .barright, body:not([data-tab=history]) #filters { display: none !important; }
 #filtersBtn[aria-expanded=true] { border-color: var(--accent); color: var(--accent); }
 .badge { background: var(--accent-weak); color: var(--accent); border-radius: 9px; padding: 0 6px; font-size: 11px; font-weight: 600; }
 
@@ -78,13 +81,28 @@ main { flex: 1; min-height: 0; min-width: 0; }
 .resizer:hover, .resizer.drag { background-color: var(--accent); padding: 0 1px; }
 body.resizing { cursor: col-resize; user-select: none; }
 .empty { padding: 40px 28px; text-align: center; }
-.listhead { position: sticky; top: 0; display: flex; gap: 6px; padding: 8px; background: var(--bg); border-bottom: 1px solid var(--border); z-index: 1; }
+#listcol { display: flex; flex-direction: column; overflow: hidden; }
+#listcol > .scroll { flex: 1; min-height: 0; overflow: auto; }
+.seg { flex: none; display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; padding: 3px 10px; color: var(--muted); font-size: 12.5px; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--accent-weak); color: var(--accent); font-weight: 600; }
+.seg button:disabled { opacity: .45; }
+body.view-messages #ssort, body.view-messages #sarch { display: none; }
+.viewbar select { max-width: 9.5em; }
+body.view-sessions .searchbar select { display: none; }
+.listhead { position: sticky; top: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 8px; background: var(--bg); border-bottom: 1px solid var(--border); z-index: 1; }
 .listhead input { flex: 1; min-width: 0; }
-.bulkbar { position: sticky; top: 45px; z-index: 1; display: flex; gap: 6px; align-items: center; padding: 6px 8px;
+.bulkbar { display: flex; gap: 6px; align-items: center; padding: 6px 8px;
   background: var(--accent-weak); border-bottom: 1px solid var(--border); font-size: 12px; }
 .bulkbar button { font-size: 12px; padding: 2px 9px; }
 .item .pick { float: left; margin: 2px 8px 0 0; accent-color: var(--accent); }
 .item.archived .stitle, .item.archived .meta { opacity: .65; }
+@media (hover: hover) {
+  #sessions .pick { opacity: 0; transition: opacity .1s; }
+  #sessions .item:hover .pick, #sessions .pick:focus-visible, body.selecting #sessions .pick { opacity: 1; }
+}
+.pill.hits { background: var(--accent-weak); color: var(--accent); }
 button.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }
 button.danger.confirm { background: var(--err); border-color: var(--err); color: #fff; }
 .summaryline { position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 6px 12px; font-size: 12px;
@@ -102,7 +120,7 @@ button.danger.confirm { background: var(--err); border-color: var(--err); color:
 .item .snip.code { font-family: var(--mono); font-size: 11.5px; }
 .item .stitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 mark { background: var(--mark); color: var(--mark-text); border-radius: 2px; padding: 0 1px; }
-.role { font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: .04em; padding: 1px 5px; border-radius: 3px;
+.role { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .04em; padding: 1px 5px; border-radius: 3px;
   border: 1px solid currentColor; white-space: nowrap; }
 .role.user { color: var(--user); } .role.assistant { color: var(--assistant); } .role.thinking { color: var(--assistant); opacity: .75; }
 .role.tool_use, .role.tool_result { color: var(--tool); } .role.memory, .role.summary { color: var(--memory); }
@@ -139,6 +157,8 @@ a { color: var(--accent); }
 .msg.tool { background: var(--sunken); padding: 5px 12px; }
 .msg.side { margin-left: 22px; }
 .msg header { display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--muted); min-width: 0; }
+.msg header > * { flex: none; }
+.msg header .role { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .msg header .acts { margin-left: auto; display: flex; gap: 4px; opacity: .35; }
 .msg:hover header .acts, .msg.hit header .acts { opacity: 1; }
 .msg header .acts button { padding: 1px 7px; font-size: 11px; }
@@ -200,7 +220,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .top, .bar, .filters { padding-left: 10px; padding-right: 10px; }
   .split > .list { flex: 1 1 auto; min-width: 0; }
   .split > .resizer, .split > .detail { display: none; }
-  .split.show-detail > .list { display: none; }
+  .split.show-detail > .list, .split.show-detail > #listcol { display: none; }
   .split.show-detail > .detail { display: block; }
   .back { display: inline-block; }
   .sbar { flex-wrap: wrap; padding: 8px 10px; }

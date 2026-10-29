@@ -306,6 +306,20 @@ class SearchTests(Base):
         self.assertFalse(ctx["session"]["resumable"])
         self.assertIn("directory", ctx["session"]["resume_blocker"])
 
+    def test_sessions_matching_groups_hits_by_session(self):
+        res = search.sessions_matching(self.conn, "token OR migration")
+        self.assertEqual(res["total"], 2)
+        hits = {s["project"]: s["hits"] for s in res["sessions"]}
+        self.assertEqual(set(hits), {"repo-alpha", "repo-beta"})
+        self.assertTrue(all(n >= 1 for n in hits.values()))
+        only_beta = search.sessions_matching(self.conn, "alembic")
+        self.assertEqual([s["project"] for s in only_beta["sessions"]], ["repo-beta"])
+        self.assertEqual(search.sessions_matching(self.conn, "nothing-matches-this")["total"], 0)
+        self.assertEqual(search.sessions_matching(self.conn, "")["total"], 0)
+        f = search.SearchFilters(project="repo-alpha", include_memory=False)
+        self.assertEqual([s["project"] for s in search.sessions_matching(self.conn, "token OR migration", f)["sessions"]],
+                         ["repo-alpha"])
+
     def test_list_sessions_and_projects(self):
         res = search.list_sessions(self.conn)
         self.assertEqual(res["total"], 2)
@@ -591,6 +605,15 @@ class HttpTests(Base):
         st, _ = self.req("POST", "/api/sessions/delete", {"ids": [b]}, headers={"Origin": "http://evil.example"})
         self.assertEqual(st, 403)
         self.assertIsNotNone(search.session_meta(self.conn, b))  # the cross-origin delete did nothing
+
+    def test_sessions_endpoint_with_match(self):
+        st, res = self.req("GET", "/api/sessions?match=alembic")
+        self.assertEqual(st, 200)
+        self.assertEqual([x["project"] for x in res["sessions"]], ["repo-beta"])
+        self.assertGreaterEqual(res["sessions"][0]["hits"], 1)
+        self.req("POST", "/api/sessions/archive", {"ids": [self.file_b.stem], "archived": True})
+        self.assertEqual(self.req("GET", "/api/sessions?match=alembic")[1]["total"], 0)
+        self.assertEqual(self.req("GET", "/api/sessions?match=alembic&archived=only")[1]["total"], 1)
 
     def test_status_reports_version_and_shutdown_is_guarded(self):
         from claude_history import __version__, server

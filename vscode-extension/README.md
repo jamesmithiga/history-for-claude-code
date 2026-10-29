@@ -23,7 +23,7 @@ Claude Code keeps a transcript of every session, but its history list only shows
 **Archive and delete**
 - **Archive** sessions you don't need to see: they disappear from search, lists and Claude's history searches, and can be unarchived any time.
 - **Delete from index** removes a session from this extension's index for good, with **Restore** available under Health while Claude Code still has the transcript.
-- Work on one session or tick many in the Sessions tab. Claude Code's own transcript files are never touched.
+- Work on one session, or tick several in the History list. Claude Code's own transcript files are never touched.
 
 **Context packs**
 - Collect excerpts from any number of sessions and send them to a new Claude chat, insert them into the editor, or save them as Markdown.

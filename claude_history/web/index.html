@@ -29,10 +29,9 @@
 
 <nav class="bar">
   <div class="tabs" role="tablist">
-    <button data-tab="search" class="active" title="Search (1)">Search</button>
-    <button data-tab="sessions" title="Sessions (2)">Sessions</button>
-    <button data-tab="pack" title="Context pack (3)">Pack <span id="packCount" class="badge">0</span></button>
-    <button data-tab="health" title="Index health (4)">Health</button>
+    <button data-tab="history" class="active" title="History (1)">History</button>
+    <button data-tab="pack" title="Context pack (2)">Pack <span id="packCount" class="badge">0</span></button>
+    <button data-tab="health" title="Index health (3)">Health</button>
   </div>
   <div class="barright">
     <select id="fProject" title="Project" aria-label="Project"><option value="">All projects</option></select>
@@ -57,20 +56,15 @@
 </div>
 
 <main>
-  <section id="tab-search" class="tab active split">
-    <div class="list" id="results" tabindex="-1">
-      <div class="empty">Search every Claude Code session on this machine, regardless of which repo is open.<br><br>
-        <span class="muted">Try an error message, a function name, a filename, or a decision you remember making.</span></div>
-    </div>
-    <div class="resizer" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
-    <div class="detail" id="detail"><div class="empty muted">Select a result to see it in context.</div></div>
-  </section>
-
-  <section id="tab-sessions" class="tab split">
-    <div class="list">
-      <div class="listhead">
-        <input id="sq" type="search" placeholder="Filter sessions by title, prompt or id…">
-        <select id="ssort"><option value="newest">Last active</option><option value="oldest">Oldest</option>
+  <section id="tab-history" class="tab active split">
+    <div class="list" id="listcol">
+      <div class="listhead viewbar">
+        <div class="seg" role="tablist" aria-label="Show">
+          <button data-view="sessions" class="on" title="Sessions, newest first; with a search, sessions whose title or first prompt match">Sessions</button>
+          <button data-view="messages" title="Messages matching the search">Messages</button>
+        </div>
+        <span class="spacer"></span>
+        <select id="ssort" title="Sort sessions" aria-label="Sort sessions"><option value="relevance" hidden>Best match</option><option value="newest" selected>Last active</option><option value="oldest">Oldest</option>
           <option value="messages">Most messages</option><option value="title">Title</option></select>
         <select id="sarch" title="Which sessions to show" aria-label="Show">
           <option value="exclude">Active</option><option value="only">Archived</option><option value="all">All</option></select>
@@ -82,10 +76,11 @@
         <button id="bulkUnarchive">Unarchive</button>
         <button id="bulkDelete" class="danger" title="Remove from the index. Claude Code's transcripts are kept.">Delete</button>
       </div>
-      <div id="sessions"></div>
+      <div class="scroll" id="sessions"></div>
+      <div class="scroll" id="results" tabindex="-1" hidden></div>
     </div>
     <div class="resizer" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
-    <div class="detail" id="sdetail"><div class="empty muted">Select a session.</div></div>
+    <div class="detail" id="detail"><div class="empty muted">Select a session, or search above to find messages across every project.</div></div>
   </section>
 
   <section id="tab-pack" class="tab">

@@ -13,9 +13,15 @@ const state = {
   results: [], sel: -1, page: 1, total: 0, lastQuery: "",
   sessions: [], spage: 1, stotal: 0,
   pack: loadPack(), lastPack: null, selected: new Set(),
+  view: "sessions", viewPinned: false,  // History list shows sessions or matching messages
 };
 
 // ------------------------------------------------------------------ utils --
+function toolLabel(name) {
+  // "mcp__ccd_turn__update_plan" -> "ccd_turn › update_plan"
+  const m = /^mcp__(.+?)__(.+)$/.exec(name || "");
+  return m ? `${m[1]} › ${m[2]}` : (name || "");
+}
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -93,6 +99,7 @@ function loadPack() { try { return JSON.parse(localStorage.getItem("cch.pack") |
 function savePack() {
   try { localStorage.setItem("cch.pack", JSON.stringify(state.pack)); } catch { /* storage unavailable */ }
   $("#packCount").textContent = state.pack.length;
+  $("#packCount").hidden = !state.pack.length;
 }
 
 // ---------------------------------------------------------------- filters --
@@ -113,7 +120,7 @@ function filterParams() {
 async function runSearch(page = 1) {
   const q = $("#q").value.trim();
   state.lastQuery = q;
-  if (!q) { renderResults(null); return; }
+  if (!q) { onQueryChange(); return; }
   const p = filterParams();
   p.set("q", q); p.set("mode", $("#mode").value); p.set("sort", $("#sort").value);
   p.set("page", page); p.set("page_size", 40);
@@ -135,16 +142,16 @@ function renderResults(res) {
   if (!res) { el.innerHTML = `<div class="empty muted">Type a query to search all projects.</div>`; return; }
   if (!res.total) {
     el.innerHTML = `<div class="empty">No matches for <b>${esc(res.query)}</b>.<br><br><span class="muted">
-      Try fewer words, a prefix like <code>migrat*</code>, the Literal text mode, or clearing filters.</span></div>`;
+      Try fewer words, a prefix like <code>migrat*</code>, <b>Literal</b> mode, or clearing filters.</span></div>`;
     return;
   }
-  const projects = new Set(res.results.map(r => r.project));
+  const first = (res.page - 1) * res.page_size + 1, last = first + res.results.length - 1;
   const pages = Math.ceil(res.total / res.page_size);
-  el.innerHTML = `<div class="summaryline"><span>${res.total.toLocaleString()} matches · ${projects.size} project(s) on this page</span>
-      <span class="spacer"></span><span>${res.ms} ms${res.mode !== "fts" && res.mode !== "substring" ? " · " + esc(res.mode) : ""}</span></div>` +
+  el.innerHTML = `<div class="summaryline"><span>${res.total.toLocaleString()} match${res.total === 1 ? "" : "es"}${res.total > res.results.length ? ` · showing ${first}–${last}` : ""}</span>
+      ${res.mode !== "fts" && res.mode !== "substring" ? `<span class="spacer"></span><span title="${esc(res.mode)}">literal fallback</span>` : ""}</div>` +
     res.results.map((r, i) => `
       <div class="item" data-i="${i}">
-        <div class="meta"><span class="role ${r.role}">${ROLE_LABEL[r.role] || r.role}${r.tool_name ? " · " + esc(r.tool_name) : ""}</span>
+        <div class="meta"><span class="role ${r.role}">${ROLE_LABEL[r.role] || r.role}${r.tool_name ? " · " + esc(toolLabel(r.tool_name)) : ""}</span>
           <span class="proj">${esc(r.project || "?")}</span><span class="title">${esc(r.title || r.session_id)}</span>
           <span>${fmtDate(r.ts, false)}</span></div>
         <div class="snip ${r.role.startsWith("tool") ? "code" : ""}">${snippetHtml(r.snippet)}</div>
@@ -272,9 +279,9 @@ function msgHtml(m, q) {
   // Tool I/O and long messages start collapsed so the conversation stays scannable.
   const clamp = (tool || m.role === "thinking") ? lines > CLAMP_LINES || m.text.length > 600
     : lines > 30 || m.text.length > 3000;
-  const more = clamp ? `<button class="expand ghost" data-a="expand">Show all · ${lines} line${lines === 1 ? "" : "s"}</button>` : "";
+  const more = clamp ? `<button class="expand ghost" data-a="expand">${lines > CLAMP_LINES ? `Show all ${lines} lines` : "Show more"}</button>` : "";
   return `<article class="msg ${tool ? "tool" : ""} ${m.is_hit ? "hit" : ""} ${m.is_sidechain ? "side" : ""} ${clamp ? "clamp" : ""}" data-id="${m.id}">
-    <header><span class="role ${m.role}">${ROLE_LABEL[m.role] || m.role}${m.tool_name ? " · " + esc(m.tool_name) : ""}</span>
+    <header><span class="role ${m.role}">${ROLE_LABEL[m.role] || m.role}${m.tool_name ? " · " + esc(toolLabel(m.tool_name)) : ""}</span>
       ${m.is_sidechain ? `<span class="pill">subagent</span>` : ""}${m.is_error ? `<span class="pill warn">error</span>` : ""}
       <span>${fmtDate(m.ts)}</span><span class="muted">#${m.id}</span>
       <span class="acts"><button data-a="copy" title="Copy excerpt with attribution (c)">Copy</button>
@@ -294,7 +301,8 @@ function wireMessages(root, s, msgs) {
     n.querySelector('[data-a="pack"]').addEventListener("click", () => addToPack(m, s));
     n.querySelector('[data-a="expand"]')?.addEventListener("click", e => {
       const collapsed = n.classList.toggle("clamp");
-      e.currentTarget.textContent = collapsed ? `Show all · ${m.text.split("\n").length} lines` : "Show less";
+      const n = m.text.split("\n").length;
+      e.currentTarget.textContent = collapsed ? (n > CLAMP_LINES ? `Show all ${n} lines` : "Show more") : "Show less";
     });
   });
 }
@@ -350,8 +358,8 @@ function confirmTwice(btn, fn, label = "Confirm delete") {
 }
 async function afterCuration() {
   state.selected.clear();
-  if ($("#tab-sessions").classList.contains("active")) await loadSessions(state.spage || 1); else state.sessions = [];
-  if (state.lastQuery) runSearch(state.page || 1);
+  if (state.view === "sessions") await loadSessions(state.spage || 1);
+  else runSearch(state.page || 1);
   refreshStatus(); loadProjects().catch(() => {});
 }
 async function archiveSessions(ids, archived = true) {
@@ -366,7 +374,7 @@ async function deleteSessions(ids) {
   try {
     const r = await api("/api/sessions/delete", { ids });
     toast(`Deleted ${r.deleted} session${r.deleted === 1 ? "" : "s"} from the index. Restore them under Health`, 5000);
-    for (const root of [$("#detail"), $("#sdetail")]) {
+    for (const root of [$("#detail")]) {
       if (root._current && ids.includes(root._current.session.id)) {
         root.innerHTML = `<div class="empty muted">Session deleted from the index.</div>`; root._current = null; revealDetail(root, false);
       }
@@ -376,7 +384,8 @@ async function deleteSessions(ids) {
 }
 function updateBulkBar() {
   const n = state.selected.size;
-  $("#bulkbar").hidden = n === 0;
+  document.body.classList.toggle("selecting", n > 0);
+  $("#bulkbar").hidden = n === 0 || state.view !== "sessions";
   $("#selCount").textContent = `${n} selected`;
   const boxes = $$("#sessions .pick");
   $("#selAll").checked = boxes.length > 0 && boxes.every(b => b.checked);
@@ -386,12 +395,43 @@ function updateBulkBar() {
   $("#bulkDelete").classList.remove("confirm"); $("#bulkDelete").textContent = `Delete`;
 }
 
+// ---------------------------------------------------------------- history --
+// One list for both: sessions when the search box is empty, matching messages
+// when it isn't. "Sessions" with a query searches session titles and prompts.
+function setView(v) {
+  state.view = v;
+  document.body.classList.toggle("view-sessions", v === "sessions");
+  document.body.classList.toggle("view-messages", v === "messages");
+  $$(".seg [data-view]").forEach(b => b.classList.toggle("on", b.dataset.view === v));
+  $(".seg [data-view=messages]").disabled = !$("#q").value.trim();
+  $("#sessions").hidden = v !== "sessions";
+  $("#results").hidden = v !== "messages";
+  if (v === "messages") $("#bulkbar").hidden = true; else updateBulkBar();
+}
+function refreshList(page = 1) {
+  if (state.view === "sessions") loadSessions(page); else runSearch(page);
+}
+function syncSessionSort() {
+  const q = $("#q").value.trim(), s = $("#ssort");
+  s.querySelector("[value=relevance]").hidden = !q;
+  if (q && s.value === "newest" && !s.dataset.touched) s.value = "relevance";
+  if (!q && s.value === "relevance") s.value = "newest";
+}
+function onQueryChange() {
+  syncSessionSort();
+  const q = $("#q").value.trim();
+  if (!q) { state.viewPinned = false; state.lastQuery = ""; setView("sessions"); loadSessions(1); return; }
+  if (state.view === "sessions" && state.viewPinned) { setView("sessions"); loadSessions(1); return; }
+  setView("messages"); runSearch(1);
+}
+
 // --------------------------------------------------------------- sessions --
 async function loadSessions(page = 1) {
   const p = filterParams();
-  p.delete("roles"); p.delete("sidechain"); p.delete("archived");
+  const q = $("#q").value.trim();
+  p.delete("archived");
   p.set("archived", $("#sarch").value);
-  if ($("#sq").value.trim()) p.set("q", $("#sq").value.trim());
+  if (q) p.set("match", q); else { p.delete("roles"); p.delete("sidechain"); }
   p.set("sort", $("#ssort").value); p.set("page", page); p.set("page_size", 60);
   const el = $("#sessions");
   try {
@@ -399,16 +439,17 @@ async function loadSessions(page = 1) {
     state.sessions = res.sessions; state.spage = res.page; state.stotal = res.total;
     const pages = Math.ceil(res.total / res.page_size);
     const label = { only: "archived sessions", all: "sessions (active and archived)" }[$("#sarch").value] || "sessions";
-    el.innerHTML = `<div class="summaryline">${res.total} ${label}</div>` + (res.sessions.map(s => `
+    const summary = !res.total ? "" : `<div class="summaryline">${res.total.toLocaleString()} ${label}${q ? " with matches" : ""}</div>`;
+    el.innerHTML = summary + (res.sessions.map(s => `
       <div class="item ${s.archived_at ? "archived" : ""}" data-sid="${esc(s.id)}">
         <input type="checkbox" class="pick" data-sid="${esc(s.id)}" ${state.selected.has(s.id) ? "checked" : ""} aria-label="Select">
         <div class="stitle">${s.archived_at ? `<span class="pill">archived</span> ` : ""}${esc(s.title || s.id)}</div>
         <div class="meta"><span class="proj">${esc(s.project || "?")}</span><span class="title" title="${esc(s.cwd || "")}">${esc(s.cwd || "")}</span>
           <span>${fmtDate(s.last_activity, false)}</span></div>
-        <div class="meta"><span>${s.message_count} msgs</span><span>started ${fmtDate(s.started, false)}</span>
+        <div class="meta">${s.hits ? `<span class="pill hits">${s.hits} match${s.hits === 1 ? "" : "es"}</span>` : ""}<span>${s.message_count} msgs</span><span>started ${fmtDate(s.started, false)}</span>
           ${s.source_missing ? `<span class="pill warn">source deleted</span>` : ""}
           ${s.git_branch && s.git_branch !== "HEAD" ? `<span>⎇ ${esc(s.git_branch)}</span>` : ""}<span class="muted">${esc(s.id.slice(0, 8))}</span></div>
-      </div>`).join("") || `<div class="empty muted">${$("#sarch").value === "only" ? "Nothing archived." : "No sessions match."}</div>`) +
+      </div>`).join("") || `<div class="empty muted">${$("#sarch").value === "only" ? "Nothing archived." : q ? `No sessions contain <b>${esc(q)}</b>.` : "No sessions match."}</div>`) +
       (pages > 1 ? `<div class="pager"><button data-pg="${res.page - 1}" ${res.page <= 1 ? "disabled" : ""}>‹ Prev</button>
         <span class="muted">Page ${res.page} / ${pages}</span><button data-pg="${res.page + 1}" ${res.page >= pages ? "disabled" : ""}>Next ›</button></div>` : "");
     $$(".pick", el).forEach(b => {
@@ -418,8 +459,9 @@ async function loadSessions(page = 1) {
     updateBulkBar();
     $$(".item", el).forEach(n => n.addEventListener("click", () => {
       $$(".item", el).forEach(x => x.classList.toggle("sel", x === n));
-      revealDetail($("#sdetail"));
-      showSession(n.dataset.sid, $("#sdetail"));
+      revealDetail($("#detail"));
+      state.lastQuery = q;  // highlight the search terms in the opened session
+      showSession(n.dataset.sid, $("#detail"));
     }));
     $$(".pager button", el).forEach(b => b.addEventListener("click", () => loadSessions(+b.dataset.pg)));
   } catch (e) { el.innerHTML = `<div class="empty">Failed: ${esc(e.message)}</div>`; }
@@ -539,12 +581,12 @@ async function loadProjects() {
 
 // ------------------------------------------------------------------- tabs --
 function showTab(name) {
+  name = { search: "history", sessions: "history" }[name] || name;  // tabs before 0.2.2
   $$(".tabs > button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   $$(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + name));
-  if (name === "sessions" && !state.sessions.length) loadSessions();
   if (name === "pack") renderPackItems();
   if (name === "health") refreshStatus();
-  try { localStorage.setItem("cch.tab", name); } catch {}
+  document.body.dataset.tab = name;
 }
 
 // ---------------------------------------------------------------- filters --
@@ -567,8 +609,7 @@ function clearFilters() {
   ["#fFrom", "#fTo", "#fFile"].forEach(s => $(s).value = "");
   $("#fSide").checked = true;
   $("#fArch").checked = false;
-  updateFilterBadge(); runSearch(1); state.sessions = [];
-  if ($("#tab-sessions").classList.contains("active")) loadSessions();
+  updateFilterBadge(); refreshList();
 }
 
 // --------------------------------------------------------------- resizer --
@@ -596,18 +637,25 @@ function initResizers() {
 
 // ------------------------------------------------------------------- wire --
 let debounce;
-$("#searchForm").addEventListener("submit", e => { e.preventDefault(); runSearch(1); });
-$("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(() => runSearch(1), 280); });
+$("#searchForm").addEventListener("submit", e => { e.preventDefault(); showTab("history"); onQueryChange(); });
+$("#q").addEventListener("input", () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => { showTab("history"); onQueryChange(); }, 280);
+});
+$$(".seg [data-view]").forEach(b => b.addEventListener("click", () => {
+  const v = b.dataset.view;
+  if (v === "messages" && !$("#q").value.trim()) { $("#q").focus(); return; }
+  state.viewPinned = v === "sessions" && !!$("#q").value.trim();
+  setView(v); refreshList();
+}));
 ["#mode", "#sort"].forEach(s => $(s).addEventListener("change", () => runSearch(1)));
-["#fProject", "#fFrom", "#fTo", "#fSide"].forEach(s => $(s).addEventListener("change", () => { runSearch(1); state.sessions = []; if ($("#tab-sessions").classList.contains("active")) loadSessions(); }));
-$("#fFile").addEventListener("change", () => { runSearch(1); state.sessions = []; if ($("#tab-sessions").classList.contains("active")) loadSessions(); });
-$$("#fRoles input").forEach(i => i.addEventListener("change", () => runSearch(1)));
+["#fProject", "#fFrom", "#fTo", "#fSide", "#fFile"].forEach(s => $(s).addEventListener("change", () => refreshList()));
+$$("#fRoles input").forEach(i => i.addEventListener("change", () => { if (state.view === "messages") runSearch(1); }));
 $("#filtersBtn").addEventListener("click", () => toggleFilters($("#filters").hidden));
 $("#fClear").addEventListener("click", clearFilters);
 $("#filters").addEventListener("change", updateFilterBadge);
 $("#fFile").addEventListener("input", updateFilterBadge);
-$("#sq").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(() => loadSessions(1), 250); });
-$("#ssort").addEventListener("change", () => loadSessions(1));
+$("#ssort").addEventListener("change", e => { e.target.dataset.touched = "1"; loadSessions(1); });
 $("#sarch").addEventListener("change", () => { state.selected.clear(); loadSessions(1); });
 $("#selAll").addEventListener("change", e => {
   $$("#sessions .pick").forEach(b => { b.checked = e.target.checked; e.target.checked ? state.selected.add(b.dataset.sid) : state.selected.delete(b.dataset.sid); });
@@ -617,7 +665,7 @@ $("#bulkArchive").addEventListener("click", () => archiveSessions([...state.sele
 $("#bulkUnarchive").addEventListener("click", () => archiveSessions([...state.selected], false));
 $("#bulkDelete").addEventListener("click", e => confirmTwice(e.currentTarget, () => deleteSessions([...state.selected]),
   `Confirm delete ${state.selected.size}`));
-$("#fArch").addEventListener("change", () => runSearch(1));
+$("#fArch").addEventListener("change", () => { if (state.view === "messages") runSearch(1); });
 $$(".tabs > button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 $("#syncBtn").addEventListener("click", () => triggerSync(false));
 $("#pBuild").addEventListener("click", () => buildPack(false));
@@ -636,15 +684,16 @@ document.addEventListener("keydown", e => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   if (e.key === "Escape" && typing) { document.activeElement.blur(); return; }
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
-  const inSearch = $("#tab-search").classList.contains("active");
+  const inHistory = $("#tab-history").classList.contains("active");
+  const inSearch = inHistory && state.view === "messages";
   if (e.key === "Escape" && isNarrow()) { $$(".split.show-detail").forEach(x => x.classList.remove("show-detail")); return; }
-  if (e.key === "/") { e.preventDefault(); showTab("search"); $("#q").focus(); $("#q").select(); }
-  else if (["1", "2", "3", "4"].includes(e.key)) showTab(["search", "sessions", "pack", "health"][+e.key - 1]);
+  if (e.key === "/") { e.preventDefault(); showTab("history"); $("#q").focus(); $("#q").select(); }
+  else if (["1", "2", "3"].includes(e.key)) showTab(["history", "pack", "health"][+e.key - 1]);
   else if (inSearch && (e.key === "j" || e.key === "ArrowDown")) { e.preventDefault(); select(state.sel + 1); }
   else if (inSearch && (e.key === "k" || e.key === "ArrowUp")) { e.preventDefault(); select(state.sel - 1); }
   else if (inSearch && e.key === "Enter" && state.sel >= 0) showSession(state.results[state.sel].session_id, $("#detail"), state.results[state.sel].id);
   else if (e.key === "a" || e.key === "c") {
-    const cur = (inSearch ? $("#detail") : $("#sdetail"))._current;
+    const cur = inHistory && $("#detail")._current;
     if (!cur || !cur.hit) return;
     if (e.key === "a") addToPack(cur.hit, cur.session); else copy(excerpt(cur.session, cur.hit), "Excerpt copied with attribution");
   }
@@ -675,7 +724,7 @@ if (HOST) {
   ins.addEventListener("click", () => state.lastPack && HOST.insert(state.lastPack.markdown));
   new MutationObserver(() => { ins.disabled = toChat.disabled = $("#pCopy").disabled; }).observe($("#pCopy"), { attributes: true });
   // The extension can push a query (e.g. "search selection").
-  window.cchSearch = q => { showTab("search"); $("#q").value = q; runSearch(1); };
+  window.cchSearch = q => { showTab("history"); $("#q").value = q; state.viewPinned = false; onQueryChange(); };
 }
 
 (async function init() {
@@ -687,10 +736,10 @@ if (HOST) {
   loadProjects().catch(() => {});
   setInterval(refreshStatus, 10000);
   const params = new URLSearchParams(location.search);
-  let q = HOST && HOST.initialQuery != null ? HOST.initialQuery : params.get("q");
-  if (q === null) { try { q = localStorage.getItem("cch.lastq") || ""; } catch { q = ""; } }
-  if (q) { $("#q").value = q; runSearch(1); }
-  let tab = "search"; try { tab = localStorage.getItem("cch.tab") || "search"; } catch {}
-  showTab(params.get("tab") || tab);
+  const q = (HOST && HOST.initialQuery != null ? HOST.initialQuery : params.get("q")) || "";
+  $("#q").value = q;
+  setView(q ? "messages" : "sessions");
+  onQueryChange();
+  showTab(params.get("tab") || "history");
   if (!q) $("#q").focus();
 })();

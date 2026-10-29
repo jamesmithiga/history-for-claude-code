@@ -187,6 +187,19 @@ def make_handler(cfg: Config, worker: SyncWorker | None, on_shutdown=None):
                                         mode=_str(qs, "mode") or "fts")
                     res["ms"] = round((time.perf_counter() - t0) * 1000, 1)
                     return self._json(res)
+                if p == "/api/sessions" and _str(qs, "match"):
+                    arch = _str(qs, "archived") or "exclude"
+                    f = search.SearchFilters(
+                        project=_str(qs, "project"), date_from=_str(qs, "from"), date_to=_str(qs, "to"),
+                        file=_str(qs, "file"), roles=[r for r in (_str(qs, "roles") or "").split(",") if r],
+                        include_sidechain=_str(qs, "sidechain") != "0", include_memory=False,
+                        include_archived=arch != "exclude")
+                    res = search.sessions_matching(conn(), _str(qs, "match"), f, sort=_str(qs, "sort") or "relevance",
+                                                   page=_int(qs, "page", 1), page_size=_int(qs, "page_size", 50))
+                    if arch == "only":  # rare; filter after grouping rather than add another SQL variant
+                        res["sessions"] = [s for s in res["sessions"] if s["archived_at"]]
+                        res["total"] = len(res["sessions"])
+                    return self._json(res)
                 if p == "/api/sessions":
                     return self._json(search.list_sessions(
                         conn(), q=_str(qs, "q"), project=_str(qs, "project"), date_from=_str(qs, "from"),

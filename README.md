@@ -71,7 +71,9 @@ Tests: `npm test` runs the helper and backend tests. `npm run test:integration -
 Filters: project, message type (user / Claude / tool calls / tool output / thinking / memory), date range, referenced file path, subagents on/off. Sort by relevance, newest or oldest.
 
 ### Web app keys
-`/` search · `j`/`k` move · `Enter` open full session · `a` add the current hit to the context pack · `c` copy the hit with attribution · `1`–`4` switch tabs.
+`/` search · `j`/`k` move through matching messages · `Enter` open full session · `a` add the current hit to the context pack · `c` copy the hit with attribution · `1`–`3` switch between History, Pack and Health · `Esc` back to the list on narrow screens.
+
+**History** is one list. With the search box empty it shows your sessions, newest first. Type to see matching messages, or switch to **Sessions** to see the sessions that contain matches, with a count on each.
 
 ### CLI
 ```text
@@ -104,12 +106,12 @@ A session **can't** be resumed if Claude Code has already deleted its transcript
 ### Archive and delete
 Neither one touches Claude Code's own transcript files.
 - **Archive** hides a session from search, the Sessions list, project counts and Claude's MCP searches. It's reversible:
-  - Sessions tab → **Show: Archived** lists what's hidden, with an **Unarchive** button on each session.
+  - In History, switch **Active** to **Archived** to list what's hidden, with an **Unarchive** button on each session.
   - **Filters → Include archived** searches archived sessions too.
 - **Delete from index** removes the session's messages and keeps it out of future syncs.
   - **Health → Deleted from the index** lists deletions with **Restore**, which re-reads the original transcript.
   - Restore only works while Claude Code still has that file.
-- Both work on one session (buttons in its header) or many (tick sessions in the Sessions tab, then use the bar at the top).
+- Both work on one session (buttons in its header) or many (hover a session in the list and tick it, then use the bar at the top).
 
 ### Context packs
 Collect excerpts from any project (`+ Pack` in the web app, or `cch pack <ids>`), then copy one Markdown document into a new conversation. Each pack:

@@ -361,6 +361,42 @@ def list_sessions(conn, q: str | None = None, project: str | None = None, date_f
     return {"total": total, "page": page, "page_size": page_size, "sessions": sessions}
 
 
+def sessions_matching(conn, query: str, filters: SearchFilters | None = None, sort: str = "relevance",
+                      page: int = 1, page_size: int = 50) -> dict:
+    """Sessions that contain messages matching `query`, with a hit count each.
+
+    Same shape as list_sessions, so the UI can show either in one list.
+    """
+    filters = filters or SearchFilters(include_memory=False)
+    match = build_fts_query(query)
+    page, page_size = max(1, page), max(1, min(page_size, 500))
+    if not match:
+        return {"total": 0, "page": page, "page_size": page_size, "sessions": []}
+    where, args = _filter_sql(filters)
+    cond = " AND ".join(["messages_fts MATCH ?"] + where)
+    # bm25() can't be used inside an aggregate, so rank each hit first (MATERIALIZED
+    # stops SQLite from flattening the CTE back into the GROUP BY).
+    cte = (f"WITH h AS MATERIALIZED (SELECT m.session_id, bm25(messages_fts) AS score"
+           f" FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid"
+           f" JOIN sessions s ON s.id = m.session_id LEFT JOIN projects p ON p.id = s.project_id WHERE {cond}),"
+           f" g AS (SELECT session_id, COUNT(*) AS hits, MIN(score) AS best FROM h GROUP BY session_id)")
+    order = {"newest": "s.last_activity DESC", "oldest": "s.started ASC", "messages": "s.message_count DESC",
+             "title": "s.title COLLATE NOCASE"}.get(sort, "g.best ASC")
+    total = conn.execute(f"{cte} SELECT COUNT(*) FROM g", [match, *args]).fetchone()[0]
+    rows = conn.execute(
+        f"{cte} SELECT s.id, s.title, s.cwd, s.git_branch, s.started, s.last_activity, s.message_count,"
+        " s.user_count, s.files, s.summary, s.source_missing, s.entrypoint, s.archived_at,"
+        " p.name AS project, p.key AS project_key, g.hits"
+        " FROM g JOIN sessions s ON s.id = g.session_id LEFT JOIN projects p ON p.id = s.project_id"
+        f" ORDER BY {order} LIMIT ? OFFSET ?", [match, *args, page_size, (page - 1) * page_size]).fetchall()
+    sessions = []
+    for r in rows:
+        d = dict(r)
+        d["files"] = (json.loads(d["files"]) if d.get("files") else [])[:8]
+        sessions.append(d)
+    return {"total": total, "page": page, "page_size": page_size, "sessions": sessions, "match": query}
+
+
 def list_projects(conn) -> list[dict]:
     return [dict(r) for r in conn.execute(
         "SELECT p.key, p.name, p.cwd, p.repo_url, p.first_seen, p.last_seen,"

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2
+
+A simpler layout, and fixes from a full UI review.
+
+- **Search and Sessions are now one History view.** With the search box empty you see your sessions. Type to see matching messages, or switch to **Sessions** to see the sessions that contain matches, ranked by best match with a count on each. Previously that only matched session titles.
+- The app always opens on History. The project picker and filters only appear where they apply, and the Pack badge appears once the pack has something in it.
+- Better contrast on primary buttons and warning labels, and larger message-type labels.
+- MCP tool names read as `server › tool`, and long names no longer push Copy / + Pack off the message.
+- "Show more" instead of a misleading "Show all · 2 lines" on long single-line tool output.
+- Clearer result counts ("195 matches · showing 1–40"), and selection checkboxes appear on hover.
+- Fixed: on narrow screens, opening a result pushed it off-screen.
+
 ## 0.2.1
 
 - Fixed "unknown endpoint" errors (for example on **Confirm delete**) after upgrading. All editor windows share one local backend, and a window could keep using a backend started by an older version. The extension now checks the backend's version and replaces an older one automatically. If that older backend can't be stopped (versions before 0.2.1), you get a message asking you to reload the other window.
