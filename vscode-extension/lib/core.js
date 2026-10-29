@@ -106,9 +106,24 @@ function buildWebviewHtml(indexHtml, { cssUri, jsUri, cspSource, nonce, initialQ
   return html;
 }
 
+/** -1, 0 or 1 comparing dotted numeric versions; a missing version counts as oldest. */
+function compareVersions(a, b) {
+  const pa = String(a || "0").split(".").map(n => parseInt(n, 10) || 0);
+  const pb = String(b || "0").split(".").map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
 /** Talks to the Python backend (`cch serve`), starting it when needed. */
 class Backend {
-  constructor({ python, cchPath, port, env, log }) {
+  constructor({ python, cchPath, port, env, log, expectedVersion }) {
+    // All editor windows share one port. expectedVersion lets us replace a server
+    // left behind by an older version, which wouldn't know newer endpoints.
+    this.expectedVersion = expectedVersion || null;
+    this.staleWarning = null;
     this.python = python;
     this.cchPath = cchPath;
     this.port = port;
@@ -152,7 +167,9 @@ class Backend {
   ensure() {
     if (this.starting) return this.starting;
     this.starting = (async () => {
-      if (await this.alive()) return;
+      if (await this.alive()) {
+        if (!(await this.replaceIfOlder())) return;
+      }
       this.log(`Starting backend: ${this.python} ${this.cchPath} serve --port ${this.port}`);
       let spawnError = null;
       let stderr = "";
@@ -180,6 +197,30 @@ class Backend {
     return this.starting.finally(() => { this.starting = null; });
   }
 
+  /**
+   * If the running server is older than this extension, ask it to stop so we can
+   * start our own. Returns true when the port was freed. A newer server is kept,
+   * so two editors on different versions never keep replacing each other.
+   */
+  async replaceIfOlder() {
+    if (!this.expectedVersion) return false;
+    let status;
+    try { status = await this.raw("GET", "/api/status", undefined, 3000); } catch { return false; }
+    if (compareVersions(status.app_version, this.expectedVersion) >= 0) return false;
+    const running = status.app_version || "older than 0.2.1";
+    try {
+      await this.raw("POST", "/api/shutdown", {}, 3000);
+    } catch (e) {
+      this.staleWarning = `An older Claude History backend (${running}) is using port ${this.port}, probably started by ` +
+        "another editor window that hasn't been reloaded. Reload that window, or restart the editor, to use this version.";
+      this.log(this.staleWarning);
+      return false;
+    }
+    this.log(`Replaced older backend ${running} with ${this.expectedVersion}`);
+    for (let i = 0; i < 40 && (await this.alive()); i++) await new Promise(r => setTimeout(r, 125));
+    return true;
+  }
+
   /** Request with one automatic (re)start if the server isn't reachable. */
   async request(method, urlPath, body) {
     try {
@@ -197,4 +238,4 @@ class Backend {
   }
 }
 
-module.exports = { samePath, findClaudeBinary, buildWebviewHtml, makeNonce, Backend };
+module.exports = { samePath, findClaudeBinary, buildWebviewHtml, makeNonce, compareVersions, Backend };

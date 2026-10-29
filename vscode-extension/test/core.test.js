@@ -6,7 +6,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const net = require("net");
-const { samePath, findClaudeBinary, buildWebviewHtml, Backend } = require("../lib/core");
+const { samePath, findClaudeBinary, buildWebviewHtml, compareVersions, Backend } = require("../lib/core");
 
 test("samePath ignores case, slashes and trailing separators on Windows only", () => {
   assert.ok(samePath("C:\\Work\\My Repo", "c:/work/my repo/", "win32"));
@@ -36,6 +36,13 @@ test("buildWebviewHtml injects CSP, nonce'd bridge and webview URIs", () => {
   assert.strictEqual(html.split("</script>").length - 1, 2);
   assert.ok(html.includes('"say \\"hi\\"\\u003c/script>"'));
   assert.throws(() => buildWebviewHtml("<html></html>", { cssUri: "a", jsUri: "b", cspSource: "c", nonce: "n" }));
+});
+
+test("compareVersions orders dotted versions; missing counts as oldest", () => {
+  assert.strictEqual(compareVersions("0.2.1", "0.2.0"), 1);
+  assert.strictEqual(compareVersions("0.2.0", "0.10.0"), -1);
+  assert.strictEqual(compareVersions("1.0", "1.0.0"), 0);
+  assert.strictEqual(compareVersions(undefined, "0.0.1"), -1);
 });
 
 function freePort() {
@@ -81,6 +88,37 @@ test("Backend starts the bundled Python server, serves requests, and restarts af
     assert.strictEqual(st.sessions, 1);
   } finally {
     backend.dispose();
-    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  }
+});
+
+test("a newer client replaces an older backend on the shared port; an older client keeps it", { timeout: 120000 }, async () => {
+  const cch = path.join(__dirname, "..", "python", "cch.py");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cch-ext-"));
+  const port = await freePort();
+  const env = Object.assign({}, process.env, { CLAUDE_HISTORY_DATA: path.join(tmp, "data"),
+    CLAUDE_CONFIG_DIR: path.join(tmp, "claude") });
+  const python = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
+  const version = require("../package.json").version;
+  const first = new Backend({ python, cchPath: cch, port, env, expectedVersion: version });
+  const newer = new Backend({ python, cchPath: cch, port, env, expectedVersion: "99.0.0" });
+  const older = new Backend({ python, cchPath: cch, port, env, expectedVersion: "0.0.1" });
+  try {
+    await first.ensure();
+    const oldProc = first.child;
+    const before = await first.raw("GET", "/api/status");
+    assert.strictEqual(before.app_version, version);
+    await older.ensure();                       // older client: reuse, don't replace
+    assert.strictEqual(older.child, null);
+    assert.strictEqual((await older.raw("GET", "/api/status")).pid, before.pid);
+    await newer.ensure();                       // newer client: stop the old server, start its own
+    assert.ok(newer.child, "newer client should have started its own server");
+    const after = await newer.raw("GET", "/api/status");
+    assert.notStrictEqual(after.pid, before.pid);
+    for (let i = 0; i < 50 && oldProc.exitCode === null; i++) await new Promise(r => setTimeout(r, 100));
+    assert.notStrictEqual(oldProc.exitCode, null, "old server process should have exited");
+  } finally {
+    for (const b of [first, newer, older]) b.dispose();
+    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
   }
 });

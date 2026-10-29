@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+import os
 import socketserver
 import threading
 import time
@@ -20,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import contextpack, curation, db, ingest, search
+from . import __version__, contextpack, curation, db, ingest, search
 from .config import Config
 
 log = logging.getLogger("claude_history.server")
@@ -86,7 +87,7 @@ class LocalHTTPServer(ThreadingHTTPServer):
         self.server_name, self.server_port = host, port
 
 
-def make_handler(cfg: Config, worker: SyncWorker | None):
+def make_handler(cfg: Config, worker: SyncWorker | None, on_shutdown=None):
     allowed_hosts = {f"127.0.0.1:{cfg.port}", f"localhost:{cfg.port}", f"[::1]:{cfg.port}",
                      f"{cfg.host}:{cfg.port}"}
     local = threading.local()
@@ -167,6 +168,9 @@ def make_handler(cfg: Config, worker: SyncWorker | None):
                     inv["sync_error"] = worker.last_error if worker else None
                     inv["sync_interval"] = cfg.sync_interval
                     inv["db_path"] = str(cfg.db_path)
+                    # Lets a newer client recognise (and replace) an older server on the shared port.
+                    inv["app_version"] = __version__
+                    inv["pid"] = os.getpid()
                     inv["claude_dirs"] = [str(d) for d in cfg.claude_dirs]
                     return self._json(inv)
                 if p == "/api/search":
@@ -225,6 +229,12 @@ def make_handler(cfg: Config, worker: SyncWorker | None):
             p = urlsplit(self.path).path
             try:
                 body = self._body()
+                if p == "/api/shutdown":
+                    if not on_shutdown:
+                        return self._json({"error": "shutdown not supported here"}, HTTPStatus.NOT_FOUND)
+                    self._json({"stopping": True, "app_version": __version__})
+                    threading.Thread(target=on_shutdown, daemon=True).start()
+                    return
                 if p == "/api/sync":
                     full = bool(body.get("full"))
                     if worker:
@@ -288,7 +298,13 @@ def serve(cfg: Config, open_browser: bool = False, background_sync: bool = True)
     worker = SyncWorker(cfg) if background_sync else None
     if worker:
         worker.start()
-    httpd = LocalHTTPServer((cfg.host, cfg.port), make_handler(cfg, worker))
+    httpd = None
+
+    def shutdown() -> None:
+        log.info("shutdown requested by a client")
+        httpd.shutdown()
+
+    httpd = LocalHTTPServer((cfg.host, cfg.port), make_handler(cfg, worker, on_shutdown=shutdown))
     url = f"http://127.0.0.1:{cfg.port}/" if cfg.host in ("127.0.0.1", "0.0.0.0") else f"http://{cfg.host}:{cfg.port}/"
     print(f"Claude History running at {url}  (Ctrl+C to stop)", flush=True)
     if open_browser:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import os
 import shutil
 import sqlite3
 import sys
@@ -590,6 +591,18 @@ class HttpTests(Base):
         st, _ = self.req("POST", "/api/sessions/delete", {"ids": [b]}, headers={"Origin": "http://evil.example"})
         self.assertEqual(st, 403)
         self.assertIsNotNone(search.session_meta(self.conn, b))  # the cross-origin delete did nothing
+
+    def test_status_reports_version_and_shutdown_is_guarded(self):
+        from claude_history import __version__, server
+        st, status = self.req("GET", "/api/status")
+        self.assertEqual((status["app_version"], status["pid"]), (__version__, os.getpid()))
+        self.assertEqual(self.req("POST", "/api/shutdown", {})[0], 404)  # this test server has no shutdown hook
+        stopped = threading.Event()
+        self.httpd.RequestHandlerClass = server.make_handler(self.cfg, None, on_shutdown=stopped.set)
+        self.assertEqual(self.req("POST", "/api/shutdown", {}, headers={"Origin": "http://evil.example"})[0], 403)
+        self.assertFalse(stopped.wait(0.3))
+        self.assertEqual(self.req("POST", "/api/shutdown", {})[0], 200)
+        self.assertTrue(stopped.wait(2))
 
     def test_rejects_foreign_host_and_cross_origin_post(self):
         self.assertEqual(self.req("GET", "/api/status", headers={"Host": "evil.example:80"})[0], 403)

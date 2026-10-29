@@ -49,6 +49,7 @@ async function openPanel(context, query) {
   panel.webview.html = `<!doctype html><body style="font-family:var(--vscode-font-family);padding:20px">Starting Claude History…</body>`;
   try {
     await backend.ensure();
+    warnIfStale();
   } catch (e) {
     panel.webview.html = `<!doctype html><body style="font-family:var(--vscode-font-family);padding:20px">
       <h3>Claude History backend could not start</h3><p>${escapeHtml(e.message)}</p>
@@ -350,6 +351,14 @@ async function pickAndResume(context) {
 }
 
 // ----------------------------------------------------------------- status --
+let staleWarned = false;
+function warnIfStale() {
+  if (backend.staleWarning && !staleWarned) {
+    staleWarned = true;
+    vscode.window.showWarningMessage(`Claude History: ${backend.staleWarning}`);
+  }
+}
+
 async function refreshStatus() {
   try {
     const s = await backend.raw("GET", "/api/status", undefined, 3000);
@@ -373,6 +382,7 @@ function activate(context) {
     python: c.get("pythonPath") || (process.platform === "win32" ? "python" : "python3"),
     cchPath: path.join(context.extensionPath, "python", "cch.py"),
     port: c.get("port") || 8765,
+    expectedVersion: context.extension.packageJSON.version,
     log,
   });
   context.subscriptions.push(output, { dispose: () => backend.dispose() });
@@ -418,7 +428,7 @@ function activate(context) {
   consumePendingResume(context).catch(e => log(`Pending resume failed: ${e.message}`));
   repairMcpPath(context).catch(e => log(`MCP path repair failed: ${e.message}`));
   if (c.get("autoStart")) {
-    backend.ensure().then(refreshStatus, e => log(`Backend start failed: ${e.message}`));
+    backend.ensure().then(() => { warnIfStale(); refreshStatus(); }, e => log(`Backend start failed: ${e.message}`));
   }
   const timer = setInterval(refreshStatus, 60000);
   context.subscriptions.push({ dispose: () => clearInterval(timer) });

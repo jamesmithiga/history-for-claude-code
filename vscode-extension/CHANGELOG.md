@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Fixed "unknown endpoint" errors (for example on **Confirm delete**) after upgrading. All editor windows share one local backend, and a window could keep using a backend started by an older version. The extension now checks the backend's version and replaces an older one automatically. If that older backend can't be stopped (versions before 0.2.1), you get a message asking you to reload the other window.
+
 ## 0.2.0
 
 - **Archive** sessions to hide them from search, the Sessions list, project counts and Claude's MCP searches. Unarchive any time; a "Show: Archived" view lists what's hidden, and **Filters → Include archived** searches it.
