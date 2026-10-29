@@ -2,7 +2,7 @@
 
 ## 0.2.4
 
-- Tidied the Marketplace page text.
+- Every feature on the Marketplace page now has a short animated walkthrough instead of a still screenshot.
 
 ## 0.2.3
 
