@@ -8,8 +8,6 @@ Claude Code keeps a transcript of every session, but its history list only shows
 
 ![Searching every project for "retry backoff", opening a match in context, then listing the sessions that contain it](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/demo.gif)
 
-*Screenshots use a made-up demo history.*
-
 ## Features
 
 **Global search**
