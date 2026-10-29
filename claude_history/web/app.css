@@ -96,7 +96,10 @@ body.view-sessions .searchbar select { display: none; }
 .bulkbar { display: flex; gap: 6px; align-items: center; padding: 6px 8px;
   background: var(--accent-weak); border-bottom: 1px solid var(--border); font-size: 12px; }
 .bulkbar button { font-size: 12px; padding: 2px 9px; }
-.item .pick { float: left; margin: 2px 8px 0 0; accent-color: var(--accent); }
+/* Checkbox in its own column so every line of the row lines up with the title. */
+#sessions .item { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; }
+#sessions .item > * { grid-column: 2; }
+#sessions .item > .pick { grid-column: 1; grid-row: 1 / span 3; align-self: start; margin: 3px 0 0; accent-color: var(--accent); }
 .item.archived .stitle, .item.archived .meta { opacity: .65; }
 @media (hover: hover) {
   #sessions .pick { opacity: 0; transition: opacity .1s; }
