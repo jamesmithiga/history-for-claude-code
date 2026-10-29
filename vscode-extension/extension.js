@@ -164,8 +164,10 @@ function runCch(context, args) {
   });
 }
 
+const MCP_OWNER = "vscode-extension";
+
 async function installMcp(context, { quiet = false } = {}) {
-  await runCch(context, ["install-mcp"]);
+  await runCch(context, ["install-mcp", "--owner", MCP_OWNER]);
   log("Registered the claude-history MCP server");
   if (!quiet) {
     vscode.window.showInformationMessage(
@@ -178,9 +180,8 @@ async function installMcp(context, { quiet = false } = {}) {
 async function repairMcpPath(context) {
   const entry = mcpEntry();
   const script = entry?.args?.[0];
-  if (!script || !/history-for-claude-code-/.test(script)) return; // not ours (e.g. a manual install): leave it
-  const current = path.join(context.extensionPath, "python", "cch.py");
-  if (samePath(script, current) || fs.existsSync(script)) return;
+  if (!script || entry.env?.CLAUDE_HISTORY_OWNER !== MCP_OWNER) return; // not ours (e.g. a manual install): leave it
+  if (fs.existsSync(script)) return; // still valid (paths may be in 8.3 short form, so don't compare strings)
   await installMcp(context, { quiet: true });
 }
 

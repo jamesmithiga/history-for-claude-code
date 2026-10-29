@@ -127,7 +127,7 @@
   },
   "scripts": {
     "bundle-python": "node scripts/bundle-python.js",
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/core.test.js",
     "test:integration": "npm run bundle-python && node test/integration/run.js",
     "package": "npm run bundle-python && npx --yes @vscode/vsce@3.6.0 package --no-dependencies -o dist/history-for-claude-code.vsix"
   }

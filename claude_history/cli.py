@@ -219,9 +219,27 @@ def _claude_json_path() -> Path:
     return Path(env) / ".claude.json" if env else Path.home() / ".claude.json"
 
 
+def _launch_path(p: str) -> str:
+    """A path Claude Code can launch: on Windows it splits commands at spaces
+    (seen with "C:\\Users\\First Last\\..."), so use the 8.3 short form there."""
+    if os.name != "nt" or " " not in p:
+        return p
+    import ctypes
+    buf = ctypes.create_unicode_buffer(1024)
+    if ctypes.windll.kernel32.GetShortPathNameW(p, buf, len(buf)) and " " not in buf.value:
+        return buf.value
+    print(f"Warning: {p} contains spaces and has no short (8.3) name; Claude Code may fail to start it.",
+          file=sys.stderr)
+    return p
+
+
 def cmd_install_mcp(cfg, args):
     """Register the MCP server at user scope (all projects) in ~/.claude.json."""
-    entry = {"type": "stdio", "command": sys.executable, "args": [str(ENTRY), "mcp"], "env": {}}
+    command, script = _launch_path(sys.executable), _launch_path(str(ENTRY))
+    # The owner tag lets the VS Code extension recognise (and re-point after updates)
+    # only the registrations it created.
+    env = {"CLAUDE_HISTORY_OWNER": args.owner} if args.owner else {}
+    entry = {"type": "stdio", "command": command, "args": [script, "mcp"], "env": env}
     path = _claude_json_path()
     if args.print_only:
         print(json.dumps({"mcpServers": {"claude-history": entry}}, indent=2))
@@ -229,8 +247,9 @@ def cmd_install_mcp(cfg, args):
     if shutil.which("claude"):
         subprocess.run(["claude", "mcp", "remove", "--scope", "user", "claude-history"],
                        capture_output=True)
-        r = subprocess.run(["claude", "mcp", "add", "--scope", "user", "claude-history", "--",
-                            sys.executable, str(ENTRY), "mcp"])
+        env_args = [a for k, v in env.items() for a in ("-e", f"{k}={v}")]
+        r = subprocess.run(["claude", "mcp", "add", "--scope", "user", *env_args, "claude-history", "--",
+                            command, script, "mcp"])
         sys.exit(r.returncode)
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     backup = path.with_name(path.name + f".bak-{time.strftime('%Y%m%d-%H%M%S')}")
@@ -348,6 +367,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("install-mcp", help="Register the MCP server for all Claude Code projects")
     s.add_argument("--print-only", action="store_true", help="Print the config instead of writing it")
+    s.add_argument("--owner", help=argparse.SUPPRESS)  # set by the VS Code extension
     s.set_defaults(fn=cmd_install_mcp)
     return p
 

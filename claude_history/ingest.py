@@ -127,6 +127,17 @@ def _decode_project_key(key: str) -> str:
     return " ".join(parts[-2:]) if parts else key
 
 
+def _path_parts(cwd: str) -> list[str]:
+    """Components of a recorded cwd, split on both separators: transcripts can be
+    read on a different OS from the one that wrote them."""
+    return [p for p in re.split(r"[\\/]+", cwd) if p]
+
+
+def _dir_name(cwd: str) -> str:
+    parts = _path_parts(cwd)
+    return parts[-1] if parts else cwd
+
+
 def _repo_url(cwd: str | None) -> str | None:
     if not cwd:
         return None
@@ -143,10 +154,10 @@ def _ensure_project(conn: sqlite3.Connection, key: str, cwd: str | None) -> int:
     if row:
         if cwd and not row["cwd"]:
             conn.execute("UPDATE projects SET cwd = ?, name = ?, repo_url = ? WHERE id = ?",
-                         (cwd, Path(cwd).name or cwd, _repo_url(cwd), row["id"]))
+                         (cwd, _dir_name(cwd), _repo_url(cwd), row["id"]))
         return row["id"]
     cwd = cwd or resolve_project_key(key)
-    name = (Path(cwd).name or cwd) if cwd else _decode_project_key(key)
+    name = _dir_name(cwd) if cwd else _decode_project_key(key)
     cur = conn.execute("INSERT INTO projects(key, name, cwd, repo_url) VALUES (?, ?, ?, ?)",
                        (key, name, cwd, _repo_url(cwd)))
     return cur.lastrowid
@@ -371,12 +382,13 @@ def _disambiguate_project_names(conn: sqlite3.Connection) -> None:
     rows = conn.execute("SELECT id, name, cwd FROM projects WHERE cwd IS NOT NULL").fetchall()
     by_base: dict[str, list] = {}
     for r in rows:
-        by_base.setdefault((Path(r["cwd"]).name or r["cwd"]).lower(), []).append(r)
+        by_base.setdefault(_dir_name(r["cwd"]).lower(), []).append(r)
     updates = []
     for group in by_base.values():
         for r in group:
-            p = Path(r["cwd"])
-            want = (str(Path(p.parent.name) / p.name) if len(group) > 1 and p.parent.name else (p.name or r["cwd"]))
+            parts = _path_parts(r["cwd"])
+            sep = "\\" if "\\" in r["cwd"] else "/"
+            want = sep.join(parts[-2:]) if len(group) > 1 and len(parts) > 1 else _dir_name(r["cwd"])
             if want != r["name"]:
                 updates.append((want, r["id"]))
     if updates:
