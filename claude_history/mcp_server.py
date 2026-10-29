@@ -118,10 +118,10 @@ class HistoryMCP:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.conn = db.connect(cfg.db_path)
-        self._last_sync = 0.0
+        self._last_sync: float | None = None  # None: never synced in this process
 
     def _maybe_sync(self, force: bool = False, full: bool = False) -> ingest.SyncStats | None:
-        if force or time.monotonic() - self._last_sync > self.cfg.mcp_sync_max_age:
+        if force or self._last_sync is None or time.monotonic() - self._last_sync > self.cfg.mcp_sync_max_age:
             try:
                 stats = ingest.sync(self.cfg, self.conn, full=full)
             except Exception:

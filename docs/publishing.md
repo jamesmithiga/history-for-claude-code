@@ -21,7 +21,21 @@ The account and token steps below are yours to do: they sign you up for services
 3. Run `npm run package` in `vscode-extension`.
 4. On the publisher page, use **… → Update** on the extension and upload the new `.vsix`.
 
-**Command-line publishing (optional, later):** `vsce publish` needs authentication. Azure DevOps personal access tokens stop working on **1 December 2026**. The recommended replacement is GitHub Actions *Trusted Publishing*, which needs the code in a GitHub repository. Until that's set up, uploading through the web page is the simplest route.
+**Automated publishing from GitHub (recommended for later releases).** The repository is https://github.com/jamesmithiga/history-for-claude-code, and `.github/workflows/publish.yml` publishes on every GitHub release.
+1. On https://marketplace.visualstudio.com/manage/publishers/jamesmithiga, add a **Trusted Publishing** policy:
+   - owner `jamesmithiga`
+   - repository `history-for-claude-code`
+   - workflow `publish.yml`
+   - no environment
+
+   No token is stored anywhere. Azure DevOps personal access tokens stop working on **1 December 2026**, so this is the route that keeps working.
+2. For Open VSX, add your Open VSX token as a repository secret named `OVSX_PAT`: *Settings → Secrets and variables → Actions → New repository secret*. Without it, that step is skipped.
+3. To release:
+   1. Bump `version` in `vscode-extension/package.json` and add a `CHANGELOG.md` entry.
+   2. Commit and push.
+   3. Create a GitHub release whose tag is `v` plus the version, for example `v0.1.1`.
+
+   The workflow re-runs the tests, checks that the tag matches the version, and publishes to both stores.
 
 ## 2. Open VSX (Cursor, Antigravity, VSCodium, Windsurf…)
 
@@ -44,4 +58,4 @@ The account and token steps below are yours to do: they sign you up for services
 - [x] MIT `LICENSE`, `CHANGELOG.md`, PNG icon (256×256), public README with no relative links or SVGs
 - [x] Package audited: 25 files with no personal data, history or index. Your name appears only in the license and publisher fields.
 - [x] Tests: 30 Python, 4 Node unit, and 9 in-VS Code integration checks passing
-- [ ] Optional: public GitHub repository, then add `repository`, `bugs` and `homepage` to `package.json` (needed for Trusted Publishing and gives users an issue tracker)
+- [x] Public GitHub repository with `repository`, `bugs` and `homepage` in `package.json`; CI on Windows, Linux and macOS

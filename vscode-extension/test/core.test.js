@@ -44,7 +44,7 @@ function freePort() {
   });
 }
 
-test("Backend starts the bundled Python server, serves requests, and restarts after it dies", { timeout: 60000 }, async () => {
+test("Backend starts the bundled Python server, serves requests, and restarts after it dies", { timeout: 120000 }, async () => {
   const cch = path.join(__dirname, "..", "python", "cch.py");
   assert.ok(fs.existsSync(cch), "run npm run bundle-python first");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cch-ext-"));

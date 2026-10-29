@@ -164,7 +164,7 @@ class Backend {
       child.stderr.on("data", d => { stderr = (stderr + d.toString()).slice(-2000); });
       child.on("exit", code => { if (this.child === child) this.child = null; this.log(`Backend exited (${code})`); });
       this.child = child;
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 120; i++) {
         if (spawnError) throw new Error(`Could not start Python (${this.python}): ${spawnError.message}. ` +
           "Set 'claudeHistory.pythonPath' to your Python 3.11+ executable.");
         if (child.exitCode !== null) {
@@ -175,7 +175,7 @@ class Backend {
         if (await this.alive()) return;
         await new Promise(r => setTimeout(r, 250));
       }
-      throw new Error("Backend did not start within 15 seconds");
+      throw new Error("Backend did not start within 30 seconds");
     })();
     return this.starting.finally(() => { this.starting = null; });
   }

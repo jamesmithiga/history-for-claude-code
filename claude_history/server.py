@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+import socketserver
 import threading
 import time
 from http import HTTPStatus
@@ -73,6 +74,16 @@ def _int(qs: dict, key: str, default: int) -> int:
 def _str(qs: dict, key: str) -> str | None:
     v = qs.get(key, [""])[0].strip()
     return v or None
+
+
+class LocalHTTPServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer without the reverse-DNS lookup in server_bind, which
+    can stall startup for many seconds on macOS. We only ever bind loopback."""
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name, self.server_port = host, port
 
 
 def make_handler(cfg: Config, worker: SyncWorker | None):
@@ -259,7 +270,7 @@ def serve(cfg: Config, open_browser: bool = False, background_sync: bool = True)
     worker = SyncWorker(cfg) if background_sync else None
     if worker:
         worker.start()
-    httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, worker))
+    httpd = LocalHTTPServer((cfg.host, cfg.port), make_handler(cfg, worker))
     url = f"http://127.0.0.1:{cfg.port}/" if cfg.host in ("127.0.0.1", "0.0.0.0") else f"http://{cfg.host}:{cfg.port}/"
     print(f"Claude History running at {url}  (Ctrl+C to stop)", flush=True)
     if open_browser:
