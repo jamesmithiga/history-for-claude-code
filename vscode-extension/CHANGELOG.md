@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3
+
+- Screenshots and a short demo on the Marketplace page (made with a fictional demo history).
+- Tool calls no longer repeat their main argument: `Read: path` is followed only by the other arguments, not the path again in JSON. The index rebuilds automatically.
+- One **Save as…** button for context packs inside the editor (the duplicate **Save .md** is hidden there).
+- Links can open a view directly: `?q=…&view=sessions` and `?session=<id>`.
+
 ## 0.2.2
 
 A simpler layout, and fixes from a full UI review.

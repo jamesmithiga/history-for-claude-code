@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
-PARSER_VERSION = 3
+PARSER_VERSION = 4
 
 # Records that carry conversation content. Everything else (api-request blobs,
 # queue operations, file-history snapshots...) is bookkeeping and is skipped.
@@ -95,13 +95,14 @@ def _tool_input_text(name: str, inp: Any) -> str:
     """A readable rendering of a tool call: the important argument first."""
     if not isinstance(inp, dict):
         return name
-    lead = ""
-    for key in ("command", "file_path", "pattern", "query", "url", "prompt", "description"):
-        if isinstance(inp.get(key), str):
-            lead = inp[key]
-            break
-    rest = json.dumps(inp, ensure_ascii=False, separators=(",", ":"))
-    return f"{name}: {lead}\n{rest}" if lead else f"{name}: {rest}"
+    lead_key = next((k for k in ("command", "file_path", "pattern", "query", "url", "prompt", "description")
+                     if isinstance(inp.get(k), str)), None)
+    if lead_key is None:
+        return f"{name}: {json.dumps(inp, ensure_ascii=False, separators=(',', ':'))}"
+    # The lead argument is shown once, as the heading; the JSON carries only the rest.
+    rest = {k: v for k, v in inp.items() if k != lead_key}
+    head = f"{name}: {inp[lead_key]}"
+    return f"{head}\n{json.dumps(rest, ensure_ascii=False, separators=(',', ':'))}" if rest else head
 
 
 def parse_record(rec: dict[str, Any], limits: Limits) -> RecordResult:

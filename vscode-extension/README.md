@@ -6,6 +6,10 @@
 
 Claude Code keeps a transcript of every session, but its history list only shows conversations from the folder you have open. When you switch repositories, earlier solutions, decisions and debugging sessions from other projects drop out of view. This extension indexes **all** of them locally, so your history isn't limited to the repository that's open.
 
+![Searching every project for "retry backoff", opening a match in context, then listing the sessions that contain it](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/demo.gif)
+
+*Screenshots use a made-up demo history.*
+
 ## Features
 
 **Global search**
@@ -15,19 +19,31 @@ Claude Code keeps a transcript of every session, but its history list only shows
 - Each match opens with the conversation around it.
 - **Search History for Selection** (`Ctrl+Alt+Shift+H`, or right-click): select an error message or function name and find where you've seen it before.
 
+![Search results from two projects, with the matching message highlighted in its conversation](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/search.png)
+
+- Switch to **Sessions** to see which conversations contain matches, ranked, with a count on each.
+
+![Sessions containing matches for a search, ranked by best match](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/sessions-matches.png)
+
 **Continue where you left off**
 - **Continue in chat** reopens a past conversation in Claude Code's chat panel with its full history. If the session belongs to another folder, that folder opens in a new window and the conversation continues there.
 - **Bring into this chat** starts a new Claude chat in your *current* workspace, pre-filled to load the old session and carry on. It works even after Claude Code has deleted the original transcript.
 - **Terminal** runs `claude --resume` in an integrated terminal, in the session's original folder.
+
+![A past session open with Continue in chat, Bring into this chat and Terminal](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/history.png)
 
 **Archive and delete**
 - **Archive** sessions you don't need to see: they disappear from search, lists and Claude's history searches, and can be unarchived any time.
 - **Delete from index** removes a session from this extension's index for good, with **Restore** available under Health while Claude Code still has the transcript.
 - Work on one session, or tick several in the History list. Claude Code's own transcript files are never touched.
 
+![Two sessions selected in the History list with Archive and Delete](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/archive.png)
+
 **Context packs**
 - Collect excerpts from any number of sessions and send them to a new Claude chat, insert them into the editor, or save them as Markdown.
 - Every excerpt keeps its project, original folder, session and date, so old context isn't mistaken for the current code.
+
+![A context pack built from two projects, ready to send to a new Claude chat](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/context-pack.png)
 - Likely secrets (API keys, tokens, passwords) are redacted from packs.
 
 **Claude can search your history too**

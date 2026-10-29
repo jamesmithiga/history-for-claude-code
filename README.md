@@ -2,6 +2,8 @@
 
 Search, browse and reuse **every** Claude Code conversation on your machine, whichever repository you have open.
 
+![Searching every project, opening a match in context, then listing the sessions that contain it](docs/media/demo.gif)
+
 Claude Code stores each session under a directory named after the folder it ran in, and its resume pickers only show the current folder's history. This app indexes all of them into one local SQLite full-text index. You can reach that index three ways:
 
 | Entry point | What it's for |
@@ -192,6 +194,7 @@ claude_history/
   cli.py           cch command
   web/             index.html, app.js, app.css (no build step)
 tests/             unit/integration tests + real-data acceptance script
+tools/             demo history generator, screenshot capture (headless Edge/Chrome), GIF builder
 vscode-extension/  VS Code extension (extension.js, lib/core.js, tests; bundles the Python app into python/)
 docs/              history format & limits, roadmap, acceptance results
 ```

@@ -720,6 +720,7 @@ if (HOST) {
   ins.id = "pInsert"; ins.textContent = "Insert in editor"; ins.disabled = true;
   ins.title = "Insert the pack at the cursor of the active editor";
   $("#pDownload").textContent = "Save as…";
+  $("#pSave").hidden = true;  // "Save as…" covers it inside the editor
   $("#pDownload").after(ins);
   ins.addEventListener("click", () => state.lastPack && HOST.insert(state.lastPack.markdown));
   new MutationObserver(() => { ins.disabled = toChat.disabled = $("#pCopy").disabled; }).observe($("#pCopy"), { attributes: true });
@@ -738,8 +739,15 @@ if (HOST) {
   const params = new URLSearchParams(location.search);
   const q = (HOST && HOST.initialQuery != null ? HOST.initialQuery : params.get("q")) || "";
   $("#q").value = q;
-  setView(q ? "messages" : "sessions");
+  // Deep links: ?q=…&view=sessions shows sessions containing matches; ?session=<id> opens one.
+  state.viewPinned = !!q && params.get("view") === "sessions";
+  setView(q && !state.viewPinned ? "messages" : "sessions");
   onQueryChange();
+  if (params.get("session")) {
+    state.lastQuery = q;
+    revealDetail($("#detail"));
+    showSession(params.get("session"), $("#detail"));
+  }
   showTab(params.get("tab") || "history");
   if (!q) $("#q").focus();
 })();
