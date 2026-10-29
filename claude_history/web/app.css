@@ -79,7 +79,14 @@ main { flex: 1; min-height: 0; min-width: 0; }
 body.resizing { cursor: col-resize; user-select: none; }
 .empty { padding: 40px 28px; text-align: center; }
 .listhead { position: sticky; top: 0; display: flex; gap: 6px; padding: 8px; background: var(--bg); border-bottom: 1px solid var(--border); z-index: 1; }
-.listhead input { flex: 1; }
+.listhead input { flex: 1; min-width: 0; }
+.bulkbar { position: sticky; top: 45px; z-index: 1; display: flex; gap: 6px; align-items: center; padding: 6px 8px;
+  background: var(--accent-weak); border-bottom: 1px solid var(--border); font-size: 12px; }
+.bulkbar button { font-size: 12px; padding: 2px 9px; }
+.item .pick { float: left; margin: 2px 8px 0 0; accent-color: var(--accent); }
+.item.archived .stitle, .item.archived .meta { opacity: .65; }
+button.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }
+button.danger.confirm { background: var(--err); border-color: var(--err); color: #fff; }
 .summaryline { position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 6px 12px; font-size: 12px;
   color: var(--muted); border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
 

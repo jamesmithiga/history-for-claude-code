@@ -52,6 +52,7 @@
   <label class="field">To<input id="fTo" type="date"></label>
   <input id="fFile" type="text" placeholder="File path contains…" title="Referenced file path" aria-label="File path contains">
   <label class="toggle" title="Include subagent transcripts"><input id="fSide" type="checkbox" checked>Subagents</label>
+  <label class="toggle" title="Also search sessions you archived"><input id="fArch" type="checkbox">Include archived</label>
   <button id="fClear" class="ghost">Clear filters</button>
 </div>
 
@@ -71,6 +72,15 @@
         <input id="sq" type="search" placeholder="Filter sessions by title, prompt or id…">
         <select id="ssort"><option value="newest">Last active</option><option value="oldest">Oldest</option>
           <option value="messages">Most messages</option><option value="title">Title</option></select>
+        <select id="sarch" title="Which sessions to show" aria-label="Show">
+          <option value="exclude">Active</option><option value="only">Archived</option><option value="all">All</option></select>
+      </div>
+      <div class="bulkbar" id="bulkbar" hidden>
+        <label class="toggle" title="Select all on this page"><input id="selAll" type="checkbox"><span id="selCount">0 selected</span></label>
+        <span class="spacer"></span>
+        <button id="bulkArchive">Archive</button>
+        <button id="bulkUnarchive">Unarchive</button>
+        <button id="bulkDelete" class="danger" title="Remove from the index. Claude Code's transcripts are kept.">Delete</button>
       </div>
       <div id="sessions"></div>
     </div>

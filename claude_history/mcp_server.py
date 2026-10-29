@@ -47,6 +47,8 @@ TOOLS = [
                      "description": "fts (default, tokenised) or substring (literal text)"},
             "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10},
             "page": {"type": "integer", "minimum": 1, "default": 1},
+            "include_archived": {"type": "boolean", "default": False,
+                                 "description": "Also search sessions the user archived (hidden by default)"},
         }, "required": ["query"]},
     },
     {
@@ -136,7 +138,8 @@ class HistoryMCP:
         self._maybe_sync()
         limit = max(1, min(int(a.get("limit") or 10), 50))
         f = search.SearchFilters(project=a.get("project"), roles=a.get("roles") or [],
-                                 date_from=a.get("date_from"), date_to=a.get("date_to"), file=a.get("file"))
+                                 date_from=a.get("date_from"), date_to=a.get("date_to"), file=a.get("file"),
+                                 include_archived=bool(a.get("include_archived")))
         res = search.search(self.conn, a["query"], f, sort=a.get("sort") or "relevance",
                             page=int(a.get("page") or 1), page_size=limit, mode=a.get("mode") or "fts")
         if not res["total"]:
@@ -161,6 +164,8 @@ class HistoryMCP:
                  + ("" if s.get("cwd_exists") else " (directory no longer exists)"),
                  f"active: {_day(s.get('started'))} → {_day(s.get('last_activity'))} UTC | {s.get('message_count')} messages"
                  + (f" | branch: {s['git_branch']}" if s.get("git_branch") else "")]
+        if s.get("archived_at"):
+            parts.append("note: the user archived this session (hidden from normal search)")
         if s.get("source_missing"):
             parts.append("note: original transcript file has been deleted; content preserved in the index")
         if s.get("resume_command"):

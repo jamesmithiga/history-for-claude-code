@@ -82,6 +82,8 @@ cch sessions migration               # sessions by title/prompt
 cch projects
 cch pack 8485 7561 --task "set up SQL Server access" --copy   # → clipboard
 cch resume 3f2a9c1e [--vscode]       # continue a past session (see below)
+cch archive 3f2a9c1e [--undo]        # hide sessions from search and lists (reversible)
+cch delete 3f2a9c1e                  # remove from the index; `cch deleted` lists, `cch restore` undoes
 cch sync [--full]                    # incremental / full rescan
 cch status                           # inventory, errors, last sync
 ```
@@ -98,6 +100,16 @@ Claude Code resumes a session only from the **folder it ran in**, and its histor
 | | `cch resume 3f2a9c1e --new-window` resumes in a separate console; `--print` only shows the command |
 
 A session **can't** be resumed if Claude Code has already deleted its transcript, or if its folder no longer exists. The web app then shows *Can't resume: …*. You can still continue that work from any repo: ask Claude to "use claude-history to load session `<id>` and continue", or paste a context pack. That starts a new conversation seeded with the retrieved history.
+
+### Archive and delete
+Neither one touches Claude Code's own transcript files.
+- **Archive** hides a session from search, the Sessions list, project counts and Claude's MCP searches. It's reversible:
+  - Sessions tab → **Show: Archived** lists what's hidden, with an **Unarchive** button on each session.
+  - **Filters → Include archived** searches archived sessions too.
+- **Delete from index** removes the session's messages and keeps it out of future syncs.
+  - **Health → Deleted from the index** lists deletions with **Restore**, which re-reads the original transcript.
+  - Restore only works while Claude Code still has that file.
+- Both work on one session (buttons in its header) or many (tick sessions in the Sessions tab, then use the bar at the top).
 
 ### Context packs
 Collect excerpts from any project (`+ Pack` in the web app, or `cch pack <ids>`), then copy one Markdown document into a new conversation. Each pack:

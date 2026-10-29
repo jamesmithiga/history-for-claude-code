@@ -21,7 +21,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from claude_history import contextpack, db, ingest, search  # noqa: E402
+from claude_history import contextpack, curation, db, ingest, search  # noqa: E402
 from claude_history.config import Config  # noqa: E402
 from claude_history.mcp_server import HistoryMCP  # noqa: E402
 
@@ -396,6 +396,92 @@ class ResumeTests(Base):
         call.assert_called_once_with(["claude-bin", "--resume", self.file_b.stem], cwd=str(self.real_cwd))
 
 
+class CurationTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.sync()
+        self.a, self.b = self.file_a.stem, self.file_b.stem
+
+    def test_archive_hides_everywhere_and_is_reversible(self):
+        self.assertGreater(search.search(self.conn, "alembic")["total"], 0)
+        self.assertEqual(curation.set_archived(self.conn, [self.b]), 1)
+        self.assertEqual(search.search(self.conn, "alembic")["total"], 0)
+        self.assertGreater(search.search(self.conn, "alembic", search.SearchFilters(include_archived=True))["total"], 0)
+        self.assertEqual([s["id"] for s in search.list_sessions(self.conn)["sessions"]], [self.a])
+        self.assertEqual([s["id"] for s in search.list_sessions(self.conn, archived="only")["sessions"]], [self.b])
+        self.assertEqual(search.list_sessions(self.conn, archived="all")["total"], 2)
+        beta = next(p for p in search.list_projects(self.conn) if p["name"] == "repo-beta")
+        self.assertEqual((beta["sessions"], beta["archived"]), (0, 1))
+        self.assertEqual(ingest.inventory(self.conn)["sessions_archived"], 1)
+        # Still readable by id, and syncing doesn't unarchive it.
+        self.assertIsNotNone(search.session_meta(self.conn, self.b)["archived_at"])
+        append_jsonl(self.file_b, [rec_user(self.b, "more alembic notes", "2026-03-12T00:00:00Z", self.cwd_b)])
+        self.sync()
+        self.assertEqual(search.search(self.conn, "alembic")["total"], 0)
+        self.assertEqual(curation.set_archived(self.conn, [self.b], archived=False), 1)
+        self.assertGreater(search.search(self.conn, "alembic")["total"], 0)
+
+    def test_delete_survives_sync_and_full_rescan(self):
+        n_before = self.count()
+        n_b = self.count("SELECT COUNT(*) FROM messages WHERE session_id = ?", (self.b,))
+        self.assertEqual(curation.delete_sessions(self.conn, [self.b]), 1)
+        self.assertEqual(self.count(), n_before - n_b)
+        self.assertIsNone(search.session_meta(self.conn, self.b))
+        self.assertEqual(search.search(self.conn, "alembic")["total"], 0)
+        append_jsonl(self.file_b, [rec_user(self.b, "alembic again", "2026-03-12T00:00:00Z", self.cwd_b)])
+        self.sync()
+        self.sync(full=True)
+        self.assertEqual(self.count("SELECT COUNT(*) FROM messages WHERE session_id = ?", (self.b,)), 0)
+        self.assertEqual(search.search(self.conn, "alembic")["total"], 0)
+        statuses = {r[0] for r in self.conn.execute("SELECT status FROM sources WHERE session_id = ?", (self.b,))}
+        self.assertEqual(statuses, {"excluded"})
+        self.assertTrue(self.file_b.exists())  # Claude Code's transcript is untouched
+        inv = ingest.inventory(self.conn)
+        self.assertEqual((inv["sessions_deleted"], inv["sources_by_status"].get("excluded")), (1, 1))
+        listed = curation.list_deleted(self.conn)
+        self.assertEqual([d["id"] for d in listed], [self.b])
+        self.assertTrue(listed[0]["restorable"])
+        self.assertEqual(listed[0]["project_name"], "repo-beta")
+
+    def test_restore_reindexes_existing_transcript(self):
+        curation.delete_sessions(self.conn, [self.b])
+        self.sync()
+        res = curation.restore_sessions(self.conn, [self.b])
+        self.assertEqual(res, {"restored": [self.b], "unavailable": []})
+        self.sync()
+        self.assertGreater(search.search(self.conn, "alembic")["total"], 0)
+        self.assertEqual(search.session_meta(self.conn, self.b)["message_count"], 3)
+        self.assertEqual(curation.list_deleted(self.conn), [])
+
+    def test_restore_when_transcript_is_gone(self):
+        curation.delete_sessions(self.conn, [self.b])
+        self.file_b.unlink()
+        self.sync()
+        self.assertFalse(curation.list_deleted(self.conn)[0]["restorable"])
+        res = curation.restore_sessions(self.conn, [self.b])
+        self.assertEqual(res, {"restored": [], "unavailable": [self.b]})
+
+    def test_subagent_and_memory_of_deleted_session_stay_out(self):
+        curation.delete_sessions(self.conn, [self.a])
+        self.sync(full=True)
+        self.assertEqual(search.search(self.conn, "ratelimiter")["total"], 0)  # subagent transcript of session a
+        self.assertEqual(self.count("SELECT COUNT(*) FROM messages WHERE session_id = ?", (self.a,)), 0)
+        self.assertGreater(search.search(self.conn, "pytest")["total"], 0)  # memory is its own pseudo-session
+
+    def test_bad_input(self):
+        with self.assertRaises(ValueError):
+            curation.set_archived(self.conn, [])
+        self.assertEqual(curation.delete_sessions(self.conn, ["no-such-session"]), 0)
+
+    def test_mcp_excludes_archived_unless_asked(self):
+        curation.set_archived(self.conn, [self.b])
+        srv = HistoryMCP(self.cfg)
+        call = lambda args: srv.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                        "params": {"name": "search_history", "arguments": args}})["result"]["content"][0]["text"]
+        self.assertIn("No matches", call({"query": "alembic"}))
+        self.assertIn("repo-beta", call({"query": "alembic", "include_archived": True}))
+
+
 class McpTests(Base):
     def test_protocol_round_trip(self):
         srv = HistoryMCP(self.cfg)
@@ -485,6 +571,25 @@ class HttpTests(Base):
                              headers={"Origin": "http://evil.example"})
             self.assertEqual(st, 403)
             self.assertEqual(opened.call_count, 1)
+
+    def test_archive_delete_restore_endpoints(self):
+        b = self.file_b.stem
+        st, res = self.req("POST", "/api/sessions/archive", {"ids": [b], "archived": True})
+        self.assertEqual((st, res["changed"]), (200, 1))
+        self.assertEqual(self.req("GET", "/api/search?q=alembic")[1]["total"], 0)
+        self.assertGreater(self.req("GET", "/api/search?q=alembic&archived=1")[1]["total"], 0)
+        self.assertEqual(self.req("GET", "/api/sessions?archived=only")[1]["total"], 1)
+        self.req("POST", "/api/sessions/archive", {"ids": [b], "archived": False})
+        st, res = self.req("POST", "/api/sessions/delete", {"ids": [b]})
+        self.assertEqual((st, res["deleted"]), (200, 1))
+        self.assertEqual([d["id"] for d in self.req("GET", "/api/deleted")[1]], [b])
+        st, res = self.req("POST", "/api/deleted/restore", {"ids": [b]})
+        self.assertEqual(res["restored"], [b])
+        self.assertGreater(self.req("GET", "/api/search?q=alembic")[1]["total"], 0)  # restored and re-indexed
+        self.assertEqual(self.req("POST", "/api/sessions/delete", {"ids": []})[0], 400)
+        st, _ = self.req("POST", "/api/sessions/delete", {"ids": [b]}, headers={"Origin": "http://evil.example"})
+        self.assertEqual(st, 403)
+        self.assertIsNotNone(search.session_meta(self.conn, b))  # the cross-origin delete did nothing
 
     def test_rejects_foreign_host_and_cross_origin_post(self):
         self.assertEqual(self.req("GET", "/api/status", headers={"Host": "evil.example:80"})[0], 403)

@@ -32,6 +32,7 @@ class SearchFilters:
     file: str | None = None             # substring of a referenced file path
     include_sidechain: bool = True
     include_memory: bool = True
+    include_archived: bool = False
 
 
 class Retriever(Protocol):
@@ -129,6 +130,8 @@ def _filter_sql(f: SearchFilters) -> tuple[list[str], list[Any]]:
         args += [pat, pat]
     if not f.include_sidechain:
         where.append("m.is_sidechain = 0")
+    if not f.include_archived:
+        where.append("s.archived_at IS NULL")
     if not f.include_memory:
         where.append("m.role != 'memory'")
     return where, args
@@ -314,10 +317,16 @@ def get_context(conn, message_id: int, before: int = 3, after: int = 3,
 
 def list_sessions(conn, q: str | None = None, project: str | None = None, date_from: str | None = None,
                   date_to: str | None = None, file: str | None = None, sort: str = "newest",
-                  page: int = 1, page_size: int = 50, include_memory: bool = False) -> dict:
+                  page: int = 1, page_size: int = 50, include_memory: bool = False,
+                  archived: str = "exclude") -> dict:
+    """archived: "exclude" (default), "only" or "all"."""
     where, args = [], []
     if not include_memory:
         where.append("s.id NOT LIKE 'memory:%'")
+    if archived == "only":
+        where.append("s.archived_at IS NOT NULL")
+    elif archived != "all":
+        where.append("s.archived_at IS NULL")
     if q:
         where.append("(s.title LIKE ? OR s.first_prompt LIKE ? OR s.id LIKE ?)")
         args += [f"%{q}%", f"%{q}%", f"{q}%"]
@@ -341,7 +350,8 @@ def list_sessions(conn, q: str | None = None, project: str | None = None, date_f
     page, page_size = max(1, page), max(1, min(page_size, 500))
     rows = conn.execute(
         "SELECT s.id, s.title, s.cwd, s.git_branch, s.started, s.last_activity, s.message_count,"
-        " s.user_count, s.files, s.summary, s.source_missing, s.entrypoint, p.name AS project, p.key AS project_key"
+        " s.user_count, s.files, s.summary, s.source_missing, s.entrypoint, s.archived_at,"
+        " p.name AS project, p.key AS project_key"
         f"{base} ORDER BY {order} LIMIT ? OFFSET ?", [*args, page_size, (page - 1) * page_size]).fetchall()
     sessions = []
     for r in rows:
@@ -354,7 +364,8 @@ def list_sessions(conn, q: str | None = None, project: str | None = None, date_f
 def list_projects(conn) -> list[dict]:
     return [dict(r) for r in conn.execute(
         "SELECT p.key, p.name, p.cwd, p.repo_url, p.first_seen, p.last_seen,"
-        " COUNT(s.id) FILTER (WHERE s.id NOT LIKE 'memory:%') AS sessions,"
-        " COALESCE(SUM(s.message_count), 0) AS messages"
+        " COUNT(s.id) FILTER (WHERE s.id NOT LIKE 'memory:%' AND s.archived_at IS NULL) AS sessions,"
+        " COUNT(s.id) FILTER (WHERE s.archived_at IS NOT NULL) AS archived,"
+        " COALESCE(SUM(s.message_count) FILTER (WHERE s.archived_at IS NULL), 0) AS messages"
         " FROM projects p LEFT JOIN sessions s ON s.project_id = p.id"
         " GROUP BY p.id ORDER BY p.last_seen DESC NULLS LAST")]

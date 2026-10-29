@@ -20,6 +20,11 @@ Claude Code keeps a transcript of every session, but its history list only shows
 - **Bring into this chat** starts a new Claude chat in your *current* workspace, pre-filled to load the old session and carry on. It works even after Claude Code has deleted the original transcript.
 - **Terminal** runs `claude --resume` in an integrated terminal, in the session's original folder.
 
+**Archive and delete**
+- **Archive** sessions you don't need to see: they disappear from search, lists and Claude's history searches, and can be unarchived any time.
+- **Delete from index** removes a session from this extension's index for good, with **Restore** available under Health while Claude Code still has the transcript.
+- Work on one session or tick many in the Sessions tab. Claude Code's own transcript files are never touched.
+
 **Context packs**
 - Collect excerpts from any number of sessions and send them to a new Claude chat, insert them into the editor, or save them as Markdown.
 - Every excerpt keeps its project, original folder, session and date, so old context isn't mistaken for the current code.

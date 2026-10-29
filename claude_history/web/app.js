@@ -12,7 +12,7 @@ const ROLE_LABEL = { user: "user", assistant: "claude", thinking: "thinking", to
 const state = {
   results: [], sel: -1, page: 1, total: 0, lastQuery: "",
   sessions: [], spage: 1, stotal: 0,
-  pack: loadPack(), lastPack: null,
+  pack: loadPack(), lastPack: null, selected: new Set(),
 };
 
 // ------------------------------------------------------------------ utils --
@@ -105,6 +105,7 @@ function filterParams() {
   if ($("#fTo").value) p.set("to", $("#fTo").value);
   if ($("#fFile").value.trim()) p.set("file", $("#fFile").value.trim());
   if (!$("#fSide").checked) p.set("sidechain", "0");
+  if ($("#fArch").checked) p.set("archived", "1");
   return p;
 }
 
@@ -172,6 +173,7 @@ function sessionHeader(s, extra = "") {
   const pills = [
     s.cwd && !s.cwd_exists ? `<span class="pill warn">directory gone</span>` : "",
     s.source_missing ? `<span class="pill warn" title="Claude Code deleted the original transcript; the index preserved it">transcript deleted</span>` : "",
+    s.archived_at ? `<span class="pill" title="Archived ${esc(fmtDate(s.archived_at))}">archived</span>` : "",
     !s.resumable && s.resume_blocker && !s.id.startsWith("memory:")
       ? `<span class="pill warn" title="${esc(s.resume_blocker)}. Continue via the claude-history tools or a context pack.">can't resume</span>` : "",
   ].join("");
@@ -190,6 +192,7 @@ function sessionHeader(s, extra = "") {
         <div class="ssub"><b>${esc(s.project || "?")}</b><span>${fmtDate(s.started, false)} → ${fmtDate(s.last_activity, false)}</span>
           <span>${s.message_count} msgs</span>${pills}</div></div>
       <div class="sacts">${resumeBtns}${extra}
+        ${`<button data-act="archive" class="ghost" title="${s.archived_at ? "Show this session in search and lists again" : "Hide from search and lists (reversible)"}">${s.archived_at ? "Unarchive" : "Archive"}</button>`}
         <button data-act="more" class="ghost" aria-expanded="${open}" title="Directory, id, summary, files">Details ${open ? "▴" : "▾"}</button></div>
     </div>
     <div class="sdetails" ${open ? "" : "hidden"}>
@@ -204,6 +207,7 @@ function sessionHeader(s, extra = "") {
         ${s.resume_command ? `<button data-act="resume" title="${esc(s.resume_command)}">Copy resume command</button>` : ""}
         <button data-act="sid">Copy session id</button>
         ${cwdLink}
+        <button data-act="delete" class="danger" title="Remove from this index and keep it out of future syncs. Claude Code's own transcript is not touched.">Delete from index</button>
         ${files.length ? `<button data-act="files">Files (${s.files.length})</button>` : ""}
       </div>
       ${files.length ? `<div class="files" hidden>${files.map(f => `<div><a href="${vscodeLink(f)}" title="Open">${esc(f)}</a></div>`).join("")}</div>` : ""}
@@ -225,6 +229,13 @@ function wireHeader(root, s) {
   root.querySelector('[data-act="chat"]')?.addEventListener("click", () => resumeSession(s, "chat"));
   root.querySelector('[data-act="bring"]')?.addEventListener("click", () => resumeSession(s, "bring"));
   root.querySelector('[data-act="sid"]')?.addEventListener("click", () => copy(s.id, "Session id copied"));
+  root.querySelector('[data-act="archive"]')?.addEventListener("click", async () => {
+    if (await archiveSessions([s.id], !s.archived_at)) {
+      const cur = root._current;
+      if (cur && cur.hit && !cur.full) showContext(cur.hit.id, root); else showSession(s.id, root);
+    }
+  });
+  root.querySelector('[data-act="delete"]')?.addEventListener("click", e => confirmTwice(e.currentTarget, () => deleteSessions([s.id])));
   root.querySelector('[data-act="files"]')?.addEventListener("click", () => { const f = root.querySelector(".files"); f.hidden = !f.hidden; });
 }
 
@@ -323,15 +334,63 @@ async function showSession(sid, root, focusId = null, offset = 0) {
     wireHeader(root, s);
     wireMessages(root, s, res.messages);
     $$("[data-pg]", root).forEach(b => b.addEventListener("click", () => showSession(sid, root, focusId, +b.dataset.pg)));
-    root._current = { session: s, hit: res.messages.find(m => m.is_hit) || res.messages[0] };
+    root._current = { session: s, hit: res.messages.find(m => m.is_hit) || res.messages[0], full: true };
     (root.querySelector(".msg.hit") || root).scrollIntoView({ block: "center" });
   } catch (e) { root.innerHTML = `<div class="empty">Could not load session: ${esc(e.message)}</div>`; }
+}
+
+// -------------------------------------------------------------- curation --
+// Archive hides sessions (reversible); delete removes them from the index and keeps
+// them out of future syncs. Claude Code's own transcript files are never touched.
+function confirmTwice(btn, fn, label = "Confirm delete") {
+  if (btn.classList.contains("confirm")) { btn.classList.remove("confirm"); fn(); return; }
+  const old = btn.textContent;
+  btn.classList.add("confirm"); btn.textContent = label;
+  setTimeout(() => { if (btn.isConnected && btn.classList.contains("confirm")) { btn.classList.remove("confirm"); btn.textContent = old; } }, 4000);
+}
+async function afterCuration() {
+  state.selected.clear();
+  if ($("#tab-sessions").classList.contains("active")) await loadSessions(state.spage || 1); else state.sessions = [];
+  if (state.lastQuery) runSearch(state.page || 1);
+  refreshStatus(); loadProjects().catch(() => {});
+}
+async function archiveSessions(ids, archived = true) {
+  try {
+    const r = await api("/api/sessions/archive", { ids, archived });
+    toast(`${archived ? "Archived" : "Unarchived"} ${r.changed} session${r.changed === 1 ? "" : "s"}`);
+    await afterCuration();
+    return true;
+  } catch (e) { toast("Failed: " + e.message, 5000); return false; }
+}
+async function deleteSessions(ids) {
+  try {
+    const r = await api("/api/sessions/delete", { ids });
+    toast(`Deleted ${r.deleted} session${r.deleted === 1 ? "" : "s"} from the index. Restore them under Health`, 5000);
+    for (const root of [$("#detail"), $("#sdetail")]) {
+      if (root._current && ids.includes(root._current.session.id)) {
+        root.innerHTML = `<div class="empty muted">Session deleted from the index.</div>`; root._current = null; revealDetail(root, false);
+      }
+    }
+    await afterCuration();
+  } catch (e) { toast("Failed: " + e.message, 5000); }
+}
+function updateBulkBar() {
+  const n = state.selected.size;
+  $("#bulkbar").hidden = n === 0;
+  $("#selCount").textContent = `${n} selected`;
+  const boxes = $$("#sessions .pick");
+  $("#selAll").checked = boxes.length > 0 && boxes.every(b => b.checked);
+  const chosen = state.sessions.filter(s => state.selected.has(s.id));
+  $("#bulkArchive").hidden = !chosen.some(s => !s.archived_at);
+  $("#bulkUnarchive").hidden = !chosen.some(s => s.archived_at);
+  $("#bulkDelete").classList.remove("confirm"); $("#bulkDelete").textContent = `Delete`;
 }
 
 // --------------------------------------------------------------- sessions --
 async function loadSessions(page = 1) {
   const p = filterParams();
-  p.delete("roles"); p.delete("sidechain");
+  p.delete("roles"); p.delete("sidechain"); p.delete("archived");
+  p.set("archived", $("#sarch").value);
   if ($("#sq").value.trim()) p.set("q", $("#sq").value.trim());
   p.set("sort", $("#ssort").value); p.set("page", page); p.set("page_size", 60);
   const el = $("#sessions");
@@ -339,17 +398,24 @@ async function loadSessions(page = 1) {
     const res = await api("/api/sessions?" + p);
     state.sessions = res.sessions; state.spage = res.page; state.stotal = res.total;
     const pages = Math.ceil(res.total / res.page_size);
-    el.innerHTML = `<div class="summaryline">${res.total} sessions</div>` + (res.sessions.map(s => `
-      <div class="item" data-sid="${esc(s.id)}">
-        <div class="stitle">${esc(s.title || s.id)}</div>
+    const label = { only: "archived sessions", all: "sessions (active and archived)" }[$("#sarch").value] || "sessions";
+    el.innerHTML = `<div class="summaryline">${res.total} ${label}</div>` + (res.sessions.map(s => `
+      <div class="item ${s.archived_at ? "archived" : ""}" data-sid="${esc(s.id)}">
+        <input type="checkbox" class="pick" data-sid="${esc(s.id)}" ${state.selected.has(s.id) ? "checked" : ""} aria-label="Select">
+        <div class="stitle">${s.archived_at ? `<span class="pill">archived</span> ` : ""}${esc(s.title || s.id)}</div>
         <div class="meta"><span class="proj">${esc(s.project || "?")}</span><span class="title" title="${esc(s.cwd || "")}">${esc(s.cwd || "")}</span>
           <span>${fmtDate(s.last_activity, false)}</span></div>
         <div class="meta"><span>${s.message_count} msgs</span><span>started ${fmtDate(s.started, false)}</span>
           ${s.source_missing ? `<span class="pill warn">source deleted</span>` : ""}
           ${s.git_branch && s.git_branch !== "HEAD" ? `<span>⎇ ${esc(s.git_branch)}</span>` : ""}<span class="muted">${esc(s.id.slice(0, 8))}</span></div>
-      </div>`).join("") || `<div class="empty muted">No sessions match.</div>`) +
+      </div>`).join("") || `<div class="empty muted">${$("#sarch").value === "only" ? "Nothing archived." : "No sessions match."}</div>`) +
       (pages > 1 ? `<div class="pager"><button data-pg="${res.page - 1}" ${res.page <= 1 ? "disabled" : ""}>‹ Prev</button>
         <span class="muted">Page ${res.page} / ${pages}</span><button data-pg="${res.page + 1}" ${res.page >= pages ? "disabled" : ""}>Next ›</button></div>` : "");
+    $$(".pick", el).forEach(b => {
+      b.addEventListener("click", e => e.stopPropagation());
+      b.addEventListener("change", () => { b.checked ? state.selected.add(b.dataset.sid) : state.selected.delete(b.dataset.sid); updateBulkBar(); });
+    });
+    updateBulkBar();
     $$(".item", el).forEach(n => n.addEventListener("click", () => {
       $$(".item", el).forEach(x => x.classList.toggle("sel", x === n));
       revealDetail($("#sdetail"));
@@ -419,6 +485,7 @@ function renderHealth(s) {
   const card = (n, l) => `<div class="card"><b>${(n ?? 0).toLocaleString()}</b><span>${l}</span></div>`;
   $("#health").innerHTML = `
     <h3>Index</h3><div class="cards">${card(s.projects, "projects")}${card(s.sessions, "sessions")}${card(s.messages, "messages")}
+      ${card(s.sessions_archived, "archived")}${card(s.sessions_deleted, "deleted from index")}
       ${card(s.sessions_source_missing, "sessions kept after source deleted")}${card(s.skipped_bad_lines, "malformed lines skipped")}</div>
     <h3>Sources</h3><div class="cards">${Object.entries(s.sources_by_status).map(([k, v]) => card(v, k)).join("")}
       ${Object.entries(s.sources_by_kind).map(([k, v]) => card(v, k + " files")).join("")}</div>
@@ -431,11 +498,28 @@ function renderHealth(s) {
     <h3>Files that could not be processed</h3>
     ${s.error_sources.length ? `<table><tr><th>Path</th><th>Error</th></tr>${s.error_sources.map(e =>
       `<tr><td><code>${esc(e.path)}</code></td><td>${esc(e.error)}</td></tr>`).join("")}</table>` : `<p class="muted">None.</p>`}
+    <h3>Deleted from the index</h3><div id="hDeleted" class="muted">Loading…</div>
     <h3>Projects</h3><div id="hProjects" class="muted">Loading…</div>
     <h3>Locations</h3><p class="muted">History read from: ${s.claude_dirs.map(d => `<code>${esc(d)}</code>`).join(", ")}<br>
       Index database: <code>${esc(s.db_path)}</code> · schema v${s.schema_version} · parser v${s.parser_version}</p>`;
   $("#hSync").onclick = () => triggerSync(false);
   $("#hFull").onclick = () => triggerSync(true);
+  api("/api/deleted").then(rows => {
+    if (!rows.length) { $("#hDeleted").innerHTML = `<p class="muted">Nothing deleted. Deleted sessions appear here and can be restored while Claude Code still has their transcript.</p>`; return; }
+    $("#hDeleted").innerHTML = `<div class="tablewrap"><table><tr><th>Session</th><th>Project</th><th>Deleted</th><th></th></tr>
+      ${rows.map(r => `<tr><td>${esc(r.title || r.id)}<br><span class="muted">${esc(r.id.slice(0, 8))} · ${r.message_count ?? "?"} msgs</span></td>
+        <td>${esc(r.project_name || r.project_key || "")}</td><td>${fmtDate(r.deleted_at)}</td>
+        <td>${r.restorable ? `<button data-restore="${esc(r.id)}">Restore</button>` : `<span class="muted" title="Claude Code no longer has this transcript">not restorable</span>`}</td></tr>`).join("")}
+      </table></div>`;
+    $$("[data-restore]", $("#hDeleted")).forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true; b.textContent = "Restoring…";
+      try {
+        const r = await api("/api/deleted/restore", { ids: [b.dataset.restore] });
+        toast(r.restored.length ? "Restored and re-indexed" : "Transcript no longer exists; nothing to re-index", 4000);
+        refreshStatus(); afterCuration();
+      } catch (e) { toast("Failed: " + e.message, 5000); b.disabled = false; b.textContent = "Restore"; }
+    }));
+  }).catch(() => {});
   api("/api/projects").then(ps => {
     $("#hProjects").innerHTML = `<div class="tablewrap"><table><tr><th>Project</th><th>Directory</th><th class="num">Sessions</th><th class="num">Messages</th><th>Last seen</th></tr>
       ${ps.map(p => `<tr><td>${esc(p.name)}</td><td><code>${esc(p.cwd || p.key)}</code></td><td class="num">${p.sessions}</td>
@@ -466,7 +550,8 @@ function showTab(name) {
 // ---------------------------------------------------------------- filters --
 function activeFilterCount() {
   const rolesChanged = $$("#fRoles input").some(i => i.checked !== i.defaultChecked);
-  return [rolesChanged, $("#fFrom").value, $("#fTo").value, $("#fFile").value.trim(), !$("#fSide").checked].filter(Boolean).length;
+  return [rolesChanged, $("#fFrom").value, $("#fTo").value, $("#fFile").value.trim(), !$("#fSide").checked,
+    $("#fArch").checked].filter(Boolean).length;
 }
 function updateFilterBadge() {
   const n = activeFilterCount(), b = $("#filterCount");
@@ -481,6 +566,7 @@ function clearFilters() {
   $$("#fRoles input").forEach(i => i.checked = i.defaultChecked);
   ["#fFrom", "#fTo", "#fFile"].forEach(s => $(s).value = "");
   $("#fSide").checked = true;
+  $("#fArch").checked = false;
   updateFilterBadge(); runSearch(1); state.sessions = [];
   if ($("#tab-sessions").classList.contains("active")) loadSessions();
 }
@@ -522,6 +608,16 @@ $("#filters").addEventListener("change", updateFilterBadge);
 $("#fFile").addEventListener("input", updateFilterBadge);
 $("#sq").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(() => loadSessions(1), 250); });
 $("#ssort").addEventListener("change", () => loadSessions(1));
+$("#sarch").addEventListener("change", () => { state.selected.clear(); loadSessions(1); });
+$("#selAll").addEventListener("change", e => {
+  $$("#sessions .pick").forEach(b => { b.checked = e.target.checked; e.target.checked ? state.selected.add(b.dataset.sid) : state.selected.delete(b.dataset.sid); });
+  updateBulkBar();
+});
+$("#bulkArchive").addEventListener("click", () => archiveSessions([...state.selected], true));
+$("#bulkUnarchive").addEventListener("click", () => archiveSessions([...state.selected], false));
+$("#bulkDelete").addEventListener("click", e => confirmTwice(e.currentTarget, () => deleteSessions([...state.selected]),
+  `Confirm delete ${state.selected.size}`));
+$("#fArch").addEventListener("change", () => runSearch(1));
 $$(".tabs > button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 $("#syncBtn").addEventListener("click", () => triggerSync(false));
 $("#pBuild").addEventListener("click", () => buildPack(false));

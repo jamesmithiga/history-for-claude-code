@@ -331,6 +331,8 @@ def sync(cfg: Config, conn: sqlite3.Connection | None = None, full: bool = False
 def _sync_one(conn: sqlite3.Connection, src: SourceFile, limits: Limits, full: bool) -> tuple[bool, int, int]:
     st = src.path.stat()
     row = conn.execute("SELECT * FROM sources WHERE path = ?", (str(src.path),)).fetchone()
+    if conn.execute("SELECT 1 FROM deleted_sessions WHERE id = ?", (src.session_id,)).fetchone():
+        return _exclude_source(conn, src, row, st)
     up_to_date = (row is not None and not full and row["status"] == "ok"
                   and row["size"] == st.st_size and row["mtime"] == st.st_mtime
                   and row["parser_version"] == PARSER_VERSION)
@@ -397,6 +399,24 @@ def _disambiguate_project_names(conn: sqlite3.Connection) -> None:
         conn.execute("COMMIT")
 
 
+def _exclude_source(conn: sqlite3.Connection, src: SourceFile, row, st) -> tuple[bool, int, int]:
+    """The user deleted this session from the index: track the file, never read it."""
+    if row is not None and row["status"] == "excluded":
+        return False, 0, 0
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        pid = _ensure_project(conn, src.project_key, None)
+        conn.execute(
+            "INSERT INTO sources(path, project_id, session_id, kind, size, mtime, status) VALUES (?,?,?,?,?,?, 'excluded')"
+            " ON CONFLICT(path) DO UPDATE SET status = 'excluded', size = excluded.size, mtime = excluded.mtime",
+            (str(src.path), pid, src.session_id, src.kind, st.st_size, st.st_mtime))
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    return False, 0, 0
+
+
 def _record_error(conn: sqlite3.Connection, src: SourceFile, exc: Exception) -> None:
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -433,7 +453,11 @@ def inventory(conn: sqlite3.Connection) -> dict:
     last_stats = db.get_meta(conn, "last_sync_stats")
     return {
         "projects": conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0],
-        "sessions": conn.execute("SELECT COUNT(*) FROM sessions WHERE id NOT LIKE 'memory:%'").fetchone()[0],
+        "sessions": conn.execute(
+            "SELECT COUNT(*) FROM sessions WHERE id NOT LIKE 'memory:%' AND archived_at IS NULL").fetchone()[0],
+        "sessions_archived": conn.execute(
+            "SELECT COUNT(*) FROM sessions WHERE archived_at IS NOT NULL").fetchone()[0],
+        "sessions_deleted": conn.execute("SELECT COUNT(*) FROM deleted_sessions").fetchone()[0],
         "sessions_source_missing": conn.execute(
             "SELECT COUNT(*) FROM sessions WHERE source_missing = 1").fetchone()[0],
         "messages": conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0],

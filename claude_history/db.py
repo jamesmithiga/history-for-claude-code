@@ -5,7 +5,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Each entry migrates from version (index) to (index + 1).
 MIGRATIONS: list[str] = [
@@ -100,6 +100,22 @@ MIGRATIONS: list[str] = [
     # v2: "HEAD" means "not a git repo / detached", not a branch name.
     """
     UPDATE sessions SET git_branch = NULL WHERE git_branch = 'HEAD';
+    """,
+    # v3: archiving (hide, reversible) and deletion tombstones (kept out of syncs).
+    """
+    ALTER TABLE sessions ADD COLUMN archived_at TEXT;
+    CREATE INDEX sessions_archived ON sessions(archived_at);
+    CREATE TABLE deleted_sessions (
+        id            TEXT PRIMARY KEY,
+        project_key   TEXT,
+        project_name  TEXT,
+        title         TEXT,
+        cwd           TEXT,
+        message_count INTEGER,
+        started       TEXT,
+        last_activity TEXT,
+        deleted_at    TEXT NOT NULL
+    );
     """,
 ]
 

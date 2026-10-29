@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import __version__, contextpack, db, ingest, search
+from . import __version__, contextpack, curation, db, ingest, search
 from .config import Config, load_config
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -133,14 +133,70 @@ def cmd_show(cfg, args):
 def cmd_sessions(cfg, args):
     conn = db.connect(cfg.db_path)
     res = search.list_sessions(conn, q=args.q, project=args.project, date_from=args.since,
-                               date_to=args.until, file=args.file, sort=args.sort, page_size=args.limit)
+                               date_to=args.until, file=args.file, sort=args.sort, page_size=args.limit,
+                               archived="only" if args.archived else "exclude")
     if args.json:
         print(json.dumps(res, indent=2, default=str))
         return
     for s in res["sessions"]:
         print(f"{s['id'][:8]}  {(s['last_activity'] or '')[:10]}  {s['message_count']:>5}  "
-              f"{(s['project'] or '')[:22]:<22}  {s['title']}" + ("  [source deleted]" if s["source_missing"] else ""))
+              f"{(s['project'] or '')[:22]:<22}  {s['title']}" + ("  [source deleted]" if s["source_missing"] else "")
+              + ("  [archived]" if s.get("archived_at") else ""))
     print(f"({len(res['sessions'])} of {res['total']})")
+
+
+def _resolve_ids(conn, refs: list[str], table: str = "sessions") -> list[str]:
+    """Accept full ids or unique prefixes (8+ chars are typical)."""
+    out = []
+    for ref in refs:
+        rows = conn.execute(f"SELECT id FROM {table} WHERE id LIKE ?", (ref + "%",)).fetchall()
+        if len(rows) != 1:
+            sys.exit(f"{len(rows)} sessions match {ref!r}; give more of the id")
+        out.append(rows[0][0])
+    return out
+
+
+def cmd_archive(cfg, args):
+    conn = db.connect(cfg.db_path)
+    ids = _resolve_ids(conn, args.sessions)
+    n = curation.set_archived(conn, ids, archived=not args.undo)
+    print(f"{'Unarchived' if args.undo else 'Archived'} {n} session(s). Claude Code's transcripts are untouched.")
+
+
+def cmd_delete(cfg, args):
+    conn = db.connect(cfg.db_path)
+    ids = _resolve_ids(conn, args.sessions)
+    if not args.yes:
+        for sid in ids:
+            s = search.session_meta(conn, sid)
+            print(f"  {sid}  {s.get('project')}  {s.get('title')}")
+        if input(f"Delete {len(ids)} session(s) from the index? Claude Code's transcripts are kept. [y/N] ").lower() != "y":
+            sys.exit("Cancelled.")
+    n = curation.delete_sessions(conn, ids)
+    print(f"Deleted {n} session(s) from the index. Undo with `cch restore <id>` while the transcript still exists.")
+
+
+def cmd_deleted(cfg, args):
+    conn = db.connect(cfg.db_path)
+    rows = curation.list_deleted(conn)
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return
+    for r in rows:
+        print(f"{r['id'][:8]}  deleted {r['deleted_at'][:10]}  {(r['project_name'] or '')[:22]:<22}  {r['title']}"
+              + ("" if r["restorable"] else "  [transcript gone: not restorable]"))
+    print(f"({len(rows)} deleted from the index)")
+
+
+def cmd_restore(cfg, args):
+    conn = db.connect(cfg.db_path)
+    ids = _resolve_ids(conn, args.sessions, table="deleted_sessions")
+    res = curation.restore_sessions(conn, ids)
+    if res["restored"]:
+        ingest.sync(cfg, conn)
+    print(f"Restored {len(res['restored'])} session(s).")
+    for sid in res["unavailable"]:
+        print(f"  {sid}: Claude Code no longer has its transcript, so there is nothing to re-index.")
 
 
 def cmd_projects(cfg, args):
@@ -327,8 +383,27 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--file", "-f")
     s.add_argument("--sort", choices=["newest", "oldest", "messages", "title"], default="newest")
     s.add_argument("--limit", "-n", type=int, default=30)
+    s.add_argument("--archived", action="store_true", help="List archived sessions instead")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_sessions)
+
+    s = sub.add_parser("archive", help="Hide sessions from search and lists (reversible)")
+    s.add_argument("sessions", nargs="+", help="Session ids or unique prefixes")
+    s.add_argument("--undo", action="store_true", help="Unarchive instead")
+    s.set_defaults(fn=cmd_archive)
+
+    s = sub.add_parser("delete", help="Remove sessions from the index (transcripts are kept)")
+    s.add_argument("sessions", nargs="+", help="Session ids or unique prefixes")
+    s.add_argument("--yes", "-y", action="store_true", help="Don't ask for confirmation")
+    s.set_defaults(fn=cmd_delete)
+
+    s = sub.add_parser("deleted", help="List sessions deleted from the index")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_deleted)
+
+    s = sub.add_parser("restore", help="Bring deleted sessions back into the index")
+    s.add_argument("sessions", nargs="+", help="Session ids or unique prefixes")
+    s.set_defaults(fn=cmd_restore)
 
     s = sub.add_parser("projects", help="List projects with history")
     s.set_defaults(fn=cmd_projects)

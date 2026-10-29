@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import contextpack, db, ingest, search
+from . import contextpack, curation, db, ingest, search
 from .config import Config
 
 log = logging.getLogger("claude_history.server")
@@ -139,15 +139,19 @@ def make_handler(cfg: Config, worker: SyncWorker | None):
             self.wfile.write(data)
 
         def _body(self) -> dict:
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > 2_000_000:
+                self.close_connection = True
+                raise ValueError("body too large")
+            # Read the body before any rejection: closing a socket with unread data
+            # makes Windows reset the connection instead of delivering our 4xx.
+            raw = self.rfile.read(n)
             if not (self.headers.get("Content-Type") or "").startswith("application/json"):
                 raise ValueError("expected application/json")
             origin = self.headers.get("Origin")
             if origin and urlsplit(origin).netloc not in allowed_hosts:
                 raise PermissionError("cross-origin request")
-            n = int(self.headers.get("Content-Length") or 0)
-            if n > 2_000_000:
-                raise ValueError("body too large")
-            return json.loads(self.rfile.read(n) or b"{}")
+            return json.loads(raw or b"{}")
 
         # ----------------------------------------------------------- routes --
         def do_GET(self):
@@ -171,7 +175,8 @@ def make_handler(cfg: Config, worker: SyncWorker | None):
                         roles=[r for r in (_str(qs, "roles") or "").split(",") if r],
                         date_from=_str(qs, "from"), date_to=_str(qs, "to"), file=_str(qs, "file"),
                         include_sidechain=_str(qs, "sidechain") != "0",
-                        include_memory=_str(qs, "memory") != "0")
+                        include_memory=_str(qs, "memory") != "0",
+                        include_archived=_str(qs, "archived") == "1")
                     t0 = time.perf_counter()
                     res = search.search(conn(), _str(qs, "q") or "", f, sort=_str(qs, "sort") or "relevance",
                                         page=_int(qs, "page", 1), page_size=_int(qs, "page_size", 30),
@@ -183,7 +188,10 @@ def make_handler(cfg: Config, worker: SyncWorker | None):
                         conn(), q=_str(qs, "q"), project=_str(qs, "project"), date_from=_str(qs, "from"),
                         date_to=_str(qs, "to"), file=_str(qs, "file"), sort=_str(qs, "sort") or "newest",
                         page=_int(qs, "page", 1), page_size=_int(qs, "page_size", 50),
-                        include_memory=_str(qs, "memory") == "1"))
+                        include_memory=_str(qs, "memory") == "1",
+                        archived=_str(qs, "archived") or "exclude"))
+                if p == "/api/deleted":
+                    return self._json(curation.list_deleted(conn()))
                 if p == "/api/projects":
                     return self._json(search.list_projects(conn()))
                 if p.startswith("/api/session/"):
@@ -224,6 +232,16 @@ def make_handler(cfg: Config, worker: SyncWorker | None):
                         return self._json({"queued": True, "full": full})
                     stats = ingest.sync(cfg, conn(), full=full)
                     return self._json(stats.as_dict())
+                if p == "/api/sessions/archive":
+                    n = curation.set_archived(conn(), body.get("ids"), bool(body.get("archived", True)))
+                    return self._json({"changed": n})
+                if p == "/api/sessions/delete":
+                    return self._json({"deleted": curation.delete_sessions(conn(), body.get("ids"))})
+                if p == "/api/deleted/restore":
+                    res = curation.restore_sessions(conn(), body.get("ids"))
+                    if res["restored"]:
+                        ingest.sync(cfg, conn())  # re-read the transcripts now, not on the next tick
+                    return self._json(res)
                 if p == "/api/resume":
                     from . import resume
                     action = body.get("action", "vscode")

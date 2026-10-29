@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0
+
+- **Archive** sessions to hide them from search, the Sessions list, project counts and Claude's MCP searches. Unarchive any time; a "Show: Archived" view lists what's hidden, and **Filters → Include archived** searches it.
+- **Delete from index** removes a session's messages and keeps it out of future syncs. **Health → Deleted from the index** lists deletions with **Restore**, which works while Claude Code still has the transcript.
+- Bulk actions: tick sessions in the Sessions tab, then Archive, Unarchive or Delete them together.
+- CLI: `cch archive`, `cch delete`, `cch deleted`, `cch restore`; `cch sessions --archived`.
+- Claude Code's own transcript files are never modified or deleted by any of this.
+- Fixed: the local server could reset the connection instead of returning an error when it rejected a request.
+- The index database moves to schema v3 automatically. Older versions of the extension can't open an upgraded index, so update every editor where you use it.
+
 ## 0.1.2
 
 - Reworded the Marketplace description: it now leads with what the extension does and ends with "Community extension, not affiliated with Anthropic."
