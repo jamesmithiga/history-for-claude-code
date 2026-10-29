@@ -4,6 +4,7 @@
 
 - A session's actions (Continue in chat, Bring into this chat, Terminal, Archive, Details) sit on their own row under the title, aligned left.
 - **Open folder in VS Code** is a button like the others instead of a text link.
+- **Delete from index** has a clear background and a brighter red in dark mode, so it reads clearly (5.5:1 contrast, up from 3:1).
 - Reworked the walkthroughs so each shows something different: the headline demo goes from search to **Continue in chat**, and new ones cover filters and browsing the session list.
 
 ## 0.2.4

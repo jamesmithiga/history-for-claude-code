@@ -6,6 +6,7 @@
   --sans: system-ui, "Segoe UI", -apple-system, sans-serif;
   --list-w: 40%;
   --accent-strong: #a8461f; --on-accent: #ffffff;  /* primary buttons: >= 4.5:1 */
+  --on-err: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -13,6 +14,7 @@
     --muted: #9b968b; --accent: #e07a52; --accent-weak: #3b2a22; --mark: #6b5513; --mark-text: #fff4cc;
     --user: #7fb0ea; --assistant: #e8916d; --tool: #9ca3af; --memory: #b39ae6;
     --accent-strong: #e07a52; --on-accent: #1d0f08; --warn: #d6a33a;
+    --err: #f0705f; --on-err: #1d0806;  /* readable red on dark panels */
   }
 }
 * { box-sizing: border-box; }
@@ -106,8 +108,10 @@ body.view-sessions .searchbar select { display: none; }
   #sessions .item:hover .pick, #sessions .pick:focus-visible, body.selecting #sessions .pick { opacity: 1; }
 }
 .pill.hits { background: var(--accent-weak); color: var(--accent); }
-button.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }
-button.danger.confirm { background: var(--err); border-color: var(--err); color: #fff; }
+/* Destructive actions: red text on a clear background so the red stays legible. */
+button.danger { background: transparent; color: var(--err); border-color: color-mix(in srgb, var(--err) 55%, var(--border)); }
+button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--err) 12%, transparent); border-color: var(--err); }
+button.danger.confirm { background: var(--err); border-color: var(--err); color: var(--on-err); }
 .summaryline { position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 6px 12px; font-size: 12px;
   color: var(--muted); border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
 
