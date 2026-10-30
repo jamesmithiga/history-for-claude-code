@@ -2,6 +2,7 @@
 
 ## 0.2.6
 
+- **History icon in the editor title bar** (top right, next to Claude's icon): one click opens the search, no shortcut to remember.
 - **Send whole session** puts the complete conversation (your messages and Claude's replies, nothing trimmed) into a new Claude chat. It reads from the extension's own copy, so it works even after Claude Code has deleted the transcript.
   - Conversations up to about 25,000 tokens go straight into the chat; longer ones are saved to a file in `~/.claude-history/exports/` that Claude is asked to read.
   - **Send with tool output** (under Details) includes every tool call and result. These are usually large, so they're always sent as a file.

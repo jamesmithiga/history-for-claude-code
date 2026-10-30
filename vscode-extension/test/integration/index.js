@@ -47,6 +47,13 @@ exports.run = async function run() {
     }
   });
 
+  await step("History icon is pinned to the editor title bar, with icons for both themes", async () => {
+    const pkg = ext.packageJSON;
+    assert.ok((pkg.contributes.menus["editor/title"] || []).some(m => m.command === "claudeHistory.open" && m.group === "navigation"));
+    const icon = pkg.contributes.commands.find(c => c.command === "claudeHistory.open").icon;
+    for (const theme of ["light", "dark"]) assert.ok(fs.existsSync(require("path").join(ext.extensionPath, icon[theme])), icon[theme]);
+  });
+
   await step("search panel opens as a webview tab", async () => {
     await vscode.commands.executeCommand("claudeHistory.open");
     await waitFor(() => vscode.window.tabGroups.all.flatMap(g => g.tabs)

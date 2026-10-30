@@ -49,7 +49,10 @@
         "command": "claudeHistory.open",
         "title": "Search Claude History",
         "category": "Claude History",
-        "icon": "$(history)"
+        "icon": {
+          "light": "media/title-icon-light.svg",
+          "dark": "media/title-icon-dark.svg"
+        }
       },
       {
         "command": "claudeHistory.searchSelection",
@@ -96,6 +99,12 @@
           "command": "claudeHistory.searchSelection",
           "when": "editorHasSelection",
           "group": "navigation@90"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "claudeHistory.open",
+          "group": "navigation"
         }
       ]
     },
