@@ -11,7 +11,7 @@ Claude Code keeps a transcript of every session, but its history list only shows
 ## Features
 
 **Global search**
-- `Ctrl+Alt+H` (`Cmd+Alt+H` on macOS), or **History** in the status bar, opens a full-text search over every session in every project.
+- Click the **History** icon in the Activity Bar (far left), or the one in the editor title bar, or press `Ctrl+Alt+H` (`Cmd+Alt+H` on macOS), to search every session in every project.
 - Use exact phrases (`"duplicate column name"`), identifiers (`load_workbook`, `foo.bar()`), prefixes (`migrat*`) and exclusions (`-test`).
 - Filter by project, date, message type (you, Claude, tool calls, tool output) and file path. Sort by relevance or date.
 - Each match opens with the conversation around it.

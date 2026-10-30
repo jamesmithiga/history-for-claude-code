@@ -122,6 +122,9 @@ button.danger.confirm { background: var(--err); border-color: var(--err); color:
 .item .meta .proj { color: var(--text); font-weight: 600; white-space: nowrap; }
 .item .meta .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .item .meta > span:last-child { white-space: nowrap; }
+/* Detail lines wrap between items, never inside one ("4 msgs" stays together). */
+.item .meta { flex-wrap: wrap; row-gap: 1px; }
+.item .meta > span { white-space: nowrap; }
 .item .snip { font-size: 12.5px; white-space: pre-wrap; word-break: break-word;
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .item .snip.code { font-family: var(--mono); font-size: 11.5px; }
@@ -171,7 +174,8 @@ a { color: var(--accent); }
 .msg.side { margin-left: 22px; }
 .msg header { display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--muted); min-width: 0; }
 .msg header > * { flex: none; }
-.msg header .role { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.msg header .role { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; }
+.msg header > span:not(.role):not(.acts) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
 .msg header .acts { margin-left: auto; display: flex; gap: 4px; opacity: .35; }
 .msg:hover header .acts, .msg.hit header .acts { opacity: 1; }
 .msg header .acts button { padding: 1px 7px; font-size: 11px; }
@@ -244,4 +248,13 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .packcfg { width: 100%; border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
   .packout { min-height: 60vh; }
   .health { padding: 14px; }
+}
+
+/* Very narrow (the VS Code side bar): the side bar already shows the name, and
+   the project picker / Filters get their own row so the tabs aren't cut off. */
+@media (max-width: 440px) {
+  .brand { display: none; }
+  .bar { flex-wrap: wrap; }
+  .barright { margin-left: 0; width: 100%; padding: 0 0 6px; }
+  .barright select { flex: 1; max-width: none; }
 }

@@ -41,7 +41,8 @@
   ],
   "main": "./extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:claudeHistory.sidebar"
   ],
   "contributes": {
     "commands": [
@@ -53,6 +54,12 @@
           "light": "media/title-icon-light.svg",
           "dark": "media/title-icon-dark.svg"
         }
+      },
+      {
+        "command": "claudeHistory.openInEditor",
+        "title": "Open in Editor Tab",
+        "category": "Claude History",
+        "icon": "$(link-external)"
       },
       {
         "command": "claudeHistory.searchSelection",
@@ -80,6 +87,24 @@
         "category": "Claude History"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudeHistory",
+          "title": "Claude History",
+          "icon": "media/activity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "claudeHistory": [
+        {
+          "type": "webview",
+          "id": "claudeHistory.sidebar",
+          "name": "History"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "claudeHistory.open",
@@ -105,6 +130,19 @@
         {
           "command": "claudeHistory.open",
           "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "claudeHistory.openInEditor",
+          "when": "view == claudeHistory.sidebar",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "claudeHistory.openInEditor",
+          "when": "false"
         }
       ]
     },

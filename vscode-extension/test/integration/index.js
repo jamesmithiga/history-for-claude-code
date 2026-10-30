@@ -54,6 +54,16 @@ exports.run = async function run() {
     for (const theme of ["light", "dark"]) assert.ok(fs.existsSync(require("path").join(ext.extensionPath, icon[theme])), icon[theme]);
   });
 
+  await step("Activity Bar icon opens History in the side bar (works with no file open)", async () => {
+    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+    const pkg = ext.packageJSON;
+    assert.ok(pkg.contributes.viewsContainers.activitybar.some(c => c.id === "claudeHistory"));
+    await vscode.commands.executeCommand("workbench.view.extension.claudeHistory");
+    const view = await waitFor(() => T.sidebar() && T.sidebar().view);
+    await waitFor(() => view.webview.html.includes("window.cchHost"));
+    assert.strictEqual(vscode.window.tabGroups.all.flatMap(g => g.tabs).length, 0, "no editor needed");
+  });
+
   await step("search panel opens as a webview tab", async () => {
     await vscode.commands.executeCommand("claudeHistory.open");
     await waitFor(() => vscode.window.tabGroups.all.flatMap(g => g.tabs)

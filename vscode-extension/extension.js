@@ -18,6 +18,7 @@ let panel;
 let output;
 let statusItem;
 let lastEditor;
+let sidebar;
 
 function cfg() {
   return vscode.workspace.getConfiguration("claudeHistory");
@@ -32,48 +33,71 @@ function webDir(context) {
 }
 
 // ------------------------------------------------------------------ panel --
+// The same app runs in two places: an editor tab (openPanel) and the side bar
+// behind the Activity Bar icon (SidebarProvider), which is visible even when no
+// file is open. Both talk to the extension through handleMessage.
+async function loadApp(context, webview, query) {
+  webview.html = `<!doctype html><body style="font-family:var(--vscode-font-family);padding:20px">Starting Claude History…</body>`;
+  try {
+    await backend.ensure();
+    warnIfStale();
+  } catch (e) {
+    webview.html = `<!doctype html><body style="font-family:var(--vscode-font-family);padding:20px">
+      <h3>Claude History backend could not start</h3><p>${escapeHtml(e.message)}</p>
+      <p>See the "Claude History" output channel for details.</p></body>`;
+    log(`Backend start failed: ${e.message}`);
+    return;
+  }
+  const index = fs.readFileSync(path.join(webDir(context), "index.html"), "utf8");
+  webview.html = buildWebviewHtml(index, {
+    cssUri: webview.asWebviewUri(vscode.Uri.file(path.join(webDir(context), "app.css"))).toString(),
+    jsUri: webview.asWebviewUri(vscode.Uri.file(path.join(webDir(context), "app.js"))).toString(),
+    cspSource: webview.cspSource,
+    nonce: makeNonce(),
+    initialQuery: query || null,
+  });
+}
+
+function webviewOptions(context) {
+  return { enableScripts: true, localResourceRoots: [vscode.Uri.file(webDir(context))] };
+}
+
 async function openPanel(context, query) {
   if (panel) {
     panel.reveal(vscode.ViewColumn.Active);
     if (query) panel.webview.postMessage({ type: "search", q: query });
     return;
   }
-  panel = vscode.window.createWebviewPanel("claudeHistory", "Claude History", vscode.ViewColumn.Active, {
-    enableScripts: true,
-    retainContextWhenHidden: true,
-    localResourceRoots: [vscode.Uri.file(webDir(context))],
-  });
-  panel.iconPath = new vscode.ThemeIcon("history");
+  panel = vscode.window.createWebviewPanel("claudeHistory", "Claude History", vscode.ViewColumn.Active,
+    { ...webviewOptions(context), retainContextWhenHidden: true });
+  panel.iconPath = {
+    light: vscode.Uri.file(path.join(context.extensionPath, "media", "title-icon-light.svg")),
+    dark: vscode.Uri.file(path.join(context.extensionPath, "media", "title-icon-dark.svg")),
+  };
   panel.onDidDispose(() => { panel = undefined; }, null, context.subscriptions);
-  panel.webview.onDidReceiveMessage(msg => handleMessage(context, msg), null, context.subscriptions);
-  panel.webview.html = `<!doctype html><body style="font-family:var(--vscode-font-family);padding:20px">Starting Claude History…</body>`;
-  try {
-    await backend.ensure();
-    warnIfStale();
-  } catch (e) {
-    panel.webview.html = `<!doctype html><body style="font-family:var(--vscode-font-family);padding:20px">
-      <h3>Claude History backend could not start</h3><p>${escapeHtml(e.message)}</p>
-      <p>See the "Claude History" output channel for details.</p></body>`;
-    log(`Backend start failed: ${e.message}`);
-    return;
-  }
   const w = panel.webview;
-  const index = fs.readFileSync(path.join(webDir(context), "index.html"), "utf8");
-  w.html = buildWebviewHtml(index, {
-    cssUri: w.asWebviewUri(vscode.Uri.file(path.join(webDir(context), "app.css"))).toString(),
-    jsUri: w.asWebviewUri(vscode.Uri.file(path.join(webDir(context), "app.js"))).toString(),
-    cspSource: w.cspSource,
-    nonce: makeNonce(),
-    initialQuery: query || null,
-  });
+  w.onDidReceiveMessage(msg => handleMessage(context, msg, w), null, context.subscriptions);
+  await loadApp(context, w, query);
+}
+
+class SidebarProvider {
+  constructor(context) { this.context = context; this.view = undefined; }
+  resolveWebviewView(view) {
+    this.view = view;
+    view.webview.options = webviewOptions(this.context);
+    view.webview.onDidReceiveMessage(msg => handleMessage(this.context, msg, view.webview), null,
+      this.context.subscriptions);
+    view.onDidDispose(() => { this.view = undefined; });
+    return loadApp(this.context, view.webview, null);
+  }
 }
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-async function handleMessage(context, msg) {
-  const reply = (ok, dataOrError) => panel && panel.webview.postMessage(
+async function handleMessage(context, msg, webview) {
+  const reply = (ok, dataOrError) => webview.postMessage(
     ok ? { reply: true, id: msg.id, ok: true, data: dataOrError }
        : { reply: true, id: msg.id, ok: false, error: String(dataOrError && dataOrError.message || dataOrError) });
   try {
@@ -429,6 +453,10 @@ function activate(context) {
     try { await fn(...a); } catch (e) { vscode.window.showErrorMessage(`Claude History: ${e.message}`); log(e.stack || e.message); }
   }));
   reg("claudeHistory.open", () => openPanel(context));
+  reg("claudeHistory.openInEditor", () => openPanel(context));
+  sidebar = new SidebarProvider(context);
+  context.subscriptions.push(vscode.window.registerWebviewViewProvider("claudeHistory.sidebar", sidebar,
+    { webviewOptions: { retainContextWhenHidden: true } }));
   reg("claudeHistory.searchSelection", async () => {
     const ed = vscode.window.activeTextEditor;
     let q = "";
@@ -462,7 +490,7 @@ function activate(context) {
   const timer = setInterval(refreshStatus, 60000);
   context.subscriptions.push({ dispose: () => clearInterval(timer) });
   // Exposed as the extension's exports for the integration tests.
-  return { _test: { resumeSession, consumePendingResume, bringPrompt, wholeSessionPrompt, PENDING_KEY } };
+  return { _test: { resumeSession, consumePendingResume, bringPrompt, wholeSessionPrompt, PENDING_KEY, sidebar: () => sidebar } };
 }
 
 function deactivate() {

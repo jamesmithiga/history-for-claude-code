@@ -37,7 +37,7 @@ It's published as **History for Claude Code** (`jamesmithiga.history-for-claude-
 
 | Do this | How |
 |---|---|
-| Search everything | `Ctrl+Alt+H`, or click **History** in the status bar |
+| Search everything | the **History** icon in the Activity Bar (always there) or editor title bar, `Ctrl+Alt+H`, or **History** in the status bar |
 | Look up an error or symbol | Select it → `Ctrl+Alt+Shift+H`, or right-click → *Search History for Selection* |
 | Continue a past session | Command palette → *Claude History: Continue a Past Session…*, or the buttons in a session's header |
 | Reuse context | Build a pack, then **Send to chat**, **Insert in editor**, **Copy** or **Save as…** |
