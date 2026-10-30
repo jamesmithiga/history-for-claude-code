@@ -1,6 +1,6 @@
 # History for Claude Code
 
-**Search, reuse and resume every Claude Code conversation on your machine, from any VS Code workspace.**
+**Your Claude Code chat history from every project, in one place: search, reuse and resume past conversations and sessions from any VS Code workspace.**
 
 > Unofficial community extension. It is not made by, affiliated with, or endorsed by Anthropic. "Claude" and "Claude Code" are trademarks of Anthropic.
 

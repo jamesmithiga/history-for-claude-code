@@ -2,6 +2,7 @@
 
 ## 0.2.6
 
+- Clearer Marketplace name, description and tags, so searches like "claude history", "claude chat history" or "claude sessions" find the extension.
 - **History in the Activity Bar** (the icon strip on the far left): always there, even with no file open. It opens History in the side bar; the ↗ button at the top opens it in a full editor tab.
 - **History icon in the editor title bar** (top right, next to Claude's icon) while a file is open.
 - Tidier narrow layout for the side bar: tabs no longer cut off, detail lines wrap cleanly, message labels stay readable.
