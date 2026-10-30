@@ -88,6 +88,7 @@ cch pack 8485 7561 --task "set up SQL Server access" --copy   # → clipboard
 cch resume 3f2a9c1e [--vscode]       # continue a past session (see below)
 cch archive 3f2a9c1e [--undo]        # hide sessions from search and lists (reversible)
 cch delete 3f2a9c1e                  # remove from the index; `cch deleted` lists, `cch restore` undoes
+cch export 3f2a9c1e [--no-tools] [--copy]   # whole session as Markdown (works after Claude deletes it)
 cch sync [--full]                    # incremental / full rescan
 cch status                           # inventory, errors, last sync
 ```

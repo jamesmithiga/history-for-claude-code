@@ -281,6 +281,19 @@ def make_handler(cfg: Config, worker: SyncWorker | None, on_shutdown=None):
                         resume.launch_in_new_terminal(plan)
                     return self._json({"ok": True, "action": action, "cwd": plan.cwd,
                                        "session_id": plan.session_id, "command": f"cch resume {plan.session_id}"})
+                if p == "/api/session-export":
+                    t = contextpack.build_session_transcript(
+                        conn(), str(body.get("session_id", "")), include_tools=bool(body.get("include_tools", True)),
+                        do_redact=bool(body.get("redact", cfg.redact_packs)))
+                    if not t:
+                        return self._json({"error": "session not found"}, HTTPStatus.NOT_FOUND)
+                    path = contextpack.save_transcript(t["markdown"], cfg.exports_dir, t["session"]["id"],
+                                                       t["session"]["title"])
+                    inline = t["tokens"] <= cfg.whole_session_inline_tokens
+                    return self._json({"path": str(path), "tokens": t["tokens"], "messages": t["messages"],
+                                       "redactions": t["redactions"], "inline": inline,
+                                       "markdown": t["markdown"] if inline or body.get("want_markdown") else None,
+                                       "session": t["session"]})
                 if p == "/api/pack":
                     items = [contextpack.PackItem(int(i["message_id"]), int(i.get("before", 0)),
                                                   int(i.get("after", 0))) for i in body.get("items", [])]

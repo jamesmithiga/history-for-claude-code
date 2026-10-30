@@ -353,6 +353,33 @@ class PackTests(Base):
         pack = contextpack.build_pack(self.conn, [contextpack.PackItem(i, 5, 5) for i in ids], max_tokens=150)
         self.assertLessEqual(pack["tokens"], 260)
 
+    def test_whole_session_transcript(self):
+        a = self.file_a.stem
+        t = contextpack.build_session_transcript(self.conn, a)
+        md = t["markdown"]
+        # Every stored (non-thinking, non-subagent) message, untrimmed and in order.
+        self.assertIn("Implement JWT authentication middleware with refresh tokens", md)
+        self.assertLess(md.index("Implement JWT authentication"), md.index("verify_refresh_token"))
+        self.assertIn("def verify_refresh_token(tok)", md)          # tool call kept by default
+        self.assertNotIn("consider token rotation", md)              # thinking left out
+        self.assertNotIn("ratelimiter", md)                          # subagent transcript left out
+        self.assertNotIn("supersecretvalue123", md)                  # redacted
+        self.assertIn("not the current repository", md)
+        self.assertIn(self.cwd_a, md)
+        self.assertEqual(t["messages"], 5)
+        short = contextpack.build_session_transcript(self.conn, a, include_tools=False)
+        self.assertNotIn("def verify_refresh_token(tok)", short["markdown"])
+        self.assertEqual(short["messages"], 3)
+        self.assertIsNone(contextpack.build_session_transcript(self.conn, "no-such-session"))
+
+    def test_whole_session_survives_deleted_transcript(self):
+        b = self.file_b.stem
+        self.file_b.unlink()
+        self.sync()
+        t = contextpack.build_session_transcript(self.conn, b)
+        self.assertIn("duplicate column name: owner_id", t["markdown"])
+        self.assertIn("deleted the original transcript", t["markdown"])
+
     def test_redaction_patterns(self):
         text = ("sk-ant-api03-abcdefghijklmnopqrstuvwxyz ghp_abcdefghijklmnopqrstuvwxyz0123 AKIAABCDEFGHIJKLMNOP "
                 "Authorization: Bearer abcdefghijklmnopqrstuvwxyz postgres://admin:hunter22@db/x password=Pa55w0rd!")
@@ -614,6 +641,21 @@ class HttpTests(Base):
         self.req("POST", "/api/sessions/archive", {"ids": [self.file_b.stem], "archived": True})
         self.assertEqual(self.req("GET", "/api/sessions?match=alembic")[1]["total"], 0)
         self.assertEqual(self.req("GET", "/api/sessions?match=alembic&archived=only")[1]["total"], 1)
+
+    def test_session_export_endpoint(self):
+        st, r = self.req("POST", "/api/session-export", {"session_id": self.file_b.stem})
+        self.assertEqual(st, 200)
+        self.assertTrue(r["inline"])
+        self.assertIn("idempotent", r["markdown"])
+        self.assertTrue(Path(r["path"]).is_file())
+        self.assertEqual(Path(r["path"]).parent, self.cfg.exports_dir)
+        self.cfg.whole_session_inline_tokens = 10  # force the "too big to inline" path
+        st, r = self.req("POST", "/api/session-export", {"session_id": self.file_b.stem})
+        self.assertFalse(r["inline"])
+        self.assertIsNone(r["markdown"])
+        st, r = self.req("POST", "/api/session-export", {"session_id": self.file_b.stem, "want_markdown": True})
+        self.assertIn("idempotent", r["markdown"])
+        self.assertEqual(self.req("POST", "/api/session-export", {"session_id": "nope"})[0], 404)
 
     def test_status_reports_version_and_shutdown_is_guarded(self):
         from claude_history import __version__, server

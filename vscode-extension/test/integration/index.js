@@ -98,6 +98,25 @@ exports.run = async function run() {
     standIn = vscode.commands.registerCommand("claude-vscode.editor.open", (...args) => { chatCalls.push(args); });
   });
 
+  await step("Send whole session: the stored conversation goes to a new chat (inline or as a file)", async () => {
+    chatCalls.length = 0;
+    const mode = await T.resumeSession(ctx, sessionId, "whole");
+    assert.ok(mode === "whole" || mode === "whole-file", mode);
+    const [sid, prompt] = chatCalls[0];
+    assert.strictEqual(sid, undefined);
+    if (mode === "whole") assert.ok(prompt.includes("Above is the full conversation") && prompt.includes("# Full transcript"));
+    else assert.ok(/is saved at `[^`]+\.md`/.test(prompt), prompt.slice(0, 200));
+  });
+
+  await step("Send with tool output: saved to a file, and Claude is told to read it", async () => {
+    chatCalls.length = 0;
+    assert.strictEqual(await T.resumeSession(ctx, sessionId, "whole-tools"), "whole-file");
+    const prompt = chatCalls[0][1];
+    const file = /is saved at `([^`]+)`/.exec(prompt)[1];
+    assert.ok(fs.existsSync(file), file);
+    assert.ok(fs.readFileSync(file, "utf8").includes("# Full transcript"));
+  });
+
   await step("unknown session gives a clear error", async () => {
     await assert.rejects(T.resumeSession(ctx, "00000000-0000-0000-0000-000000000000", "chat"), /not found/);
   });

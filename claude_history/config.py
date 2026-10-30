@@ -40,6 +40,9 @@ class Config:
     max_text_chars: int = 60000
     index_memory_files: bool = True
     redact_packs: bool = True
+    # "Send whole session to chat": transcripts up to this size go into the chat
+    # message itself; larger ones are saved to a file that Claude reads.
+    whole_session_inline_tokens: int = 25000
 
     @property
     def db_path(self) -> Path:
@@ -48,6 +51,10 @@ class Config:
     @property
     def packs_dir(self) -> Path:
         return self.data_dir / "packs"
+
+    @property
+    def exports_dir(self) -> Path:
+        return self.data_dir / "exports"
 
     @property
     def log_path(self) -> Path:

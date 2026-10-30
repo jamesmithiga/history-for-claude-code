@@ -233,6 +233,32 @@ async function openClaudeChat(sessionId, prompt) {
   await vscode.commands.executeCommand(CLAUDE_OPEN_CMD, sessionId, prompt);
 }
 
+// "Send whole session": the complete stored conversation, read from the History
+// index (so it works after Claude Code has deleted the transcript). Small enough
+// transcripts go into the chat message; larger ones are saved to a file that the
+// prompt asks Claude to read.
+const CONTEXT_FITS_TOKENS = 150000;
+
+function wholeSessionPrompt(s, exp) {
+  const what = `my earlier Claude Code session "${s.title || s.id}" (project ${s.project || "?"}, ` +
+    `${exp.messages} messages, about ${exp.tokens.toLocaleString()} tokens)`;
+  const after = "summarise where we left off and what was decided, then continue the work here. It is history from " +
+    "another folder: check it against this workspace before applying anything.";
+  if (exp.inline) return `${exp.markdown}
+---
+
+Above is the full conversation from ${what}. Please ${after}`;
+  const parts = exp.tokens > CONTEXT_FITS_TOKENS ? " in parts (it is longer than fits in one go)" : "";
+  return `The full transcript of ${what} is saved at \`${exp.path}\`. Read it${parts}, then ${after}`;
+}
+
+async function sendWholeSession(s, includeTools) {
+  const exp = await backend.request("POST", "/api/session-export", { session_id: s.id, include_tools: includeTools });
+  await openClaudeChat(undefined, wholeSessionPrompt(s, exp));
+  log(`Sent whole session ${s.id} (${exp.messages} messages, ~${exp.tokens} tokens, ${exp.inline ? "inline" : exp.path})`);
+  return exp.inline ? "whole" : "whole-file";
+}
+
 function bringPrompt(s) {
   const when = (s.last_activity || "").slice(0, 10);
   return `Continue the work from my earlier Claude Code session "${s.title || s.id}" ` +
@@ -256,6 +282,9 @@ const isOpenHere = cwd => (vscode.workspace.workspaceFolders || []).some(f => sa
 async function resumeSession(context, sessionId, mode) {
   const res = await backend.request("GET", `/api/session/${encodeURIComponent(sessionId)}?limit=1`);
   const s = res.session;
+  if (mode === "whole" || mode === "whole-tools") {
+    return sendWholeSession(s, mode === "whole-tools");
+  }
   if (mode === "bring") {
     if (!(await ensureMcpForBring(context))) throw new Error("cancelled");
     await openClaudeChat(undefined, bringPrompt(s));
@@ -433,7 +462,7 @@ function activate(context) {
   const timer = setInterval(refreshStatus, 60000);
   context.subscriptions.push({ dispose: () => clearInterval(timer) });
   // Exposed as the extension's exports for the integration tests.
-  return { _test: { resumeSession, consumePendingResume, bringPrompt, PENDING_KEY } };
+  return { _test: { resumeSession, consumePendingResume, bringPrompt, wholeSessionPrompt, PENDING_KEY } };
 }
 
 function deactivate() {

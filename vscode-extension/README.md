@@ -27,6 +27,7 @@ Claude Code keeps a transcript of every session, but its history list only shows
 - **Continue in chat** reopens a past conversation in Claude Code's chat panel with its full history. If the session belongs to another folder, that folder opens in a new window and the conversation continues there.
 - **Bring into this chat** starts a new Claude chat in your *current* workspace, pre-filled to load the old session and carry on. It works even after Claude Code has deleted the original transcript.
 - **Terminal** runs `claude --resume` in an integrated terminal, in the session's original folder.
+- **Send whole session** puts the complete conversation (your messages and Claude's replies) into a new Claude chat. It comes from this extension's own copy, so it works even after Claude Code has deleted the original. Long conversations are saved to a file that Claude reads. **Send with tool output** (under Details) includes every tool call and result too.
 
 ![Sorting and filtering the session list, opening a session, and bringing it into the current chat](https://raw.githubusercontent.com/jamesmithiga/history-for-claude-code/main/docs/media/history.gif)
 

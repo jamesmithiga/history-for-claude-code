@@ -188,9 +188,11 @@ function sessionHeader(s, extra = "") {
   const resumeBtns = HOST
     ? (s.resumable ? `<button data-act="chat" class="primary" title="Reopen this conversation in Claude Code's chat panel. If it belongs to another folder, that folder opens in a new window first.">Continue in chat</button>` : "")
       + (isMemory ? "" : `<button data-act="bring" ${s.resumable ? "" : 'class="primary"'} title="Start a new Claude chat in this workspace that loads this session through claude-history and carries on">Bring into this chat</button>`)
+      + (isMemory ? "" : `<button data-act="whole" title="Put the complete conversation (your messages and Claude's replies) into a new Claude chat. Works even if Claude Code deleted the transcript.">Send whole session</button>`)
       + (s.resumable ? `<button data-act="term" class="ghost" title="claude --resume in a terminal in this window, running in ${esc(s.cwd)}">Terminal</button>` : "")
     : !s.resumable ? "" : `<button data-act="vscode" class="primary" title="Open ${esc(s.cwd)} in VS Code and copy the resume command">Continue in VS Code</button>
        <button data-act="term" title="Resume in a new terminal window">Resume in terminal</button>`;
+  const wholeBrowser = HOST || isMemory ? "" : `<button data-act="copywhole" title="Copy the complete conversation as Markdown">Copy whole session</button>`;
   const files = (s.files || []).slice(0, 40);
   return `<div class="shead">
     <div class="sbar">
@@ -198,7 +200,7 @@ function sessionHeader(s, extra = "") {
       <div class="stitle"><h2 title="${esc(title)}">${esc(title)}</h2>
         <div class="ssub"><b>${esc(s.project || "?")}</b><span>${fmtDate(s.started, false)} → ${fmtDate(s.last_activity, false)}</span>
           <span>${s.message_count} msgs</span>${pills}</div></div>
-      <div class="sacts">${resumeBtns}${extra}
+      <div class="sacts">${resumeBtns}${wholeBrowser}${extra}
         ${`<button data-act="archive" class="ghost" title="${s.archived_at ? "Show this session in search and lists again" : "Hide from search and lists (reversible)"}">${s.archived_at ? "Unarchive" : "Archive"}</button>`}
         <button data-act="more" class="ghost" aria-expanded="${open}" title="Directory, id, summary, files">Details ${open ? "▴" : "▾"}</button></div>
     </div>
@@ -213,6 +215,9 @@ function sessionHeader(s, extra = "") {
       <div class="actions">
         ${s.resume_command ? `<button data-act="resume" title="${esc(s.resume_command)}">Copy resume command</button>` : ""}
         <button data-act="sid">Copy session id</button>
+        ${isMemory ? "" : HOST
+          ? `<button data-act="whole-tools" title="Save everything, including tool calls and output, to a file and start a Claude chat that reads it">Send with tool output</button>`
+          : `<button data-act="savewhole" title="Save everything, including tool calls and output, as a Markdown file">Save full transcript</button>`}
         ${cwdLink}
         <button data-act="delete" class="danger" title="Remove from this index and keep it out of future syncs. Claude Code's own transcript is not touched.">Delete from index</button>
         ${files.length ? `<button data-act="files">Files (${s.files.length})</button>` : ""}
@@ -235,6 +240,20 @@ function wireHeader(root, s) {
   root.querySelector('[data-act="term"]')?.addEventListener("click", () => resumeSession(s, "terminal"));
   root.querySelector('[data-act="chat"]')?.addEventListener("click", () => resumeSession(s, "chat"));
   root.querySelector('[data-act="bring"]')?.addEventListener("click", () => resumeSession(s, "bring"));
+  root.querySelector('[data-act="whole"]')?.addEventListener("click", () => resumeSession(s, "whole"));
+  root.querySelector('[data-act="whole-tools"]')?.addEventListener("click", () => resumeSession(s, "whole-tools"));
+  root.querySelector('[data-act="copywhole"]')?.addEventListener("click", async () => {
+    try {
+      const r = await api("/api/session-export", { session_id: s.id, include_tools: false, want_markdown: true });
+      await copy(r.markdown, `Whole conversation copied (${r.messages} messages, ≈${r.tokens.toLocaleString()} tokens)`);
+    } catch (e) { toast("Failed: " + e.message, 5000); }
+  });
+  root.querySelector('[data-act="savewhole"]')?.addEventListener("click", async () => {
+    try {
+      const r = await api("/api/session-export", { session_id: s.id, include_tools: true });
+      toast(`Saved ${r.messages} messages (≈${r.tokens.toLocaleString()} tokens) to ${r.path}`, 7000);
+    } catch (e) { toast("Failed: " + e.message, 5000); }
+  });
   root.querySelector('[data-act="sid"]')?.addEventListener("click", () => copy(s.id, "Session id copied"));
   root.querySelector('[data-act="archive"]')?.addEventListener("click", async () => {
     if (await archiveSessions([s.id], !s.archived_at)) {
@@ -253,6 +272,8 @@ async function resumeSession(s, action) {
       chat: "Opened in Claude's chat panel",
       window: "Opening its folder in a new window. The conversation opens in Claude's chat there",
       bring: "New Claude chat started with a request to load this session. Review and send it",
+      whole: "The whole conversation is in a new Claude chat. Review and send it",
+      "whole-file": "Full transcript saved; a new Claude chat asks Claude to read it. Review and send it",
       term: "Resuming in the terminal panel",
     };
     try { toast(said[await HOST.resume(s.id, mode)] || "Done", 5000); }

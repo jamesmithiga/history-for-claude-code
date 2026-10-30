@@ -158,3 +158,58 @@ def save_pack(markdown: str, packs_dir: Path, name: str | None = None) -> Path:
     path = packs_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{slug}.md"
     path.write_text(markdown, encoding="utf-8")
     return path
+
+
+def build_session_transcript(conn: sqlite3.Connection, session_id: str, include_tools: bool = True,
+                             do_redact: bool = True) -> dict | None:
+    """Every stored message of one session, in order, with no further trimming.
+
+    This is what "Send whole session to chat" uses. It works even after Claude
+    Code has deleted the original transcript, because it reads the index.
+    """
+    s = search.session_meta(conn, session_id)
+    if not s:
+        return None
+    roles = "" if include_tools else " AND role IN ('user', 'assistant', 'summary', 'memory')"
+    rows = conn.execute(
+        f"SELECT id, ts, role, tool_name, text FROM messages WHERE session_id = ? AND is_sidechain = 0{roles}"
+        " ORDER BY ts, id", (session_id,)).fetchall()
+    redactions = 0
+    parts = []
+    for m in rows:
+        if m["role"] == "thinking":
+            continue  # private reasoning isn't part of the conversation to hand over
+        text = m["text"]
+        if do_redact:
+            text, n = redact(text)
+            redactions += n
+        label = _ROLE_LABEL.get(m["role"], m["role"])
+        if m["tool_name"] and m["role"] == "tool_use":
+            label += f" ({m['tool_name']})"
+        fence = "```" if m["role"] in ("tool_use", "tool_result") else ""
+        body = f"{fence}\n{text}\n{fence}" if fence else text
+        parts.append(f"**{label}** · {(m['ts'] or '')[:19].replace('T', ' ')}\n\n{body}")
+    head = [f"# Full transcript: {s.get('title') or s['id']}",
+            "",
+            "> This is the complete record of an **earlier Claude Code session in another location**. It describes "
+            "past work and decisions, not the current repository. Verify against the current code before relying on it.",
+            "",
+            f"- Project: {s.get('project') or '?'}",
+            f"- Original directory: `{s.get('cwd') or 'unknown'}`" + ("" if s.get("cwd_exists") else " (no longer present)"),
+            f"- Session: `{s['id']}`",
+            f"- Dates: {(s.get('started') or '?')[:16]} → {(s.get('last_activity') or '?')[:16]} UTC",
+            f"- Messages: {len(parts)}" + ("" if include_tools else " (tool calls and output left out)")
+            + (f" · {redactions} likely secret(s) redacted" if do_redact and redactions else "")]
+    if s.get("source_missing"):
+        head.append("- Note: Claude Code has deleted the original transcript; this copy comes from the History index.")
+    markdown = "\n".join(head) + "\n\n---\n\n" + "\n\n---\n\n".join(parts) + "\n"
+    return {"markdown": markdown, "tokens": estimate_tokens(markdown), "messages": len(parts),
+            "redactions": redactions, "session": {k: s.get(k) for k in ("id", "title", "project", "cwd")}}
+
+
+def save_transcript(markdown: str, exports_dir: Path, session_id: str, title: str | None) -> Path:
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", title or "session").strip("-")[:50] or "session"
+    path = exports_dir / f"{slug}-{session_id[:8]}.md"
+    path.write_text(markdown, encoding="utf-8")
+    return path

@@ -258,6 +258,21 @@ def cmd_resume(cfg, args):
     sys.exit(resume.run_here(p))
 
 
+def cmd_export(cfg, args):
+    conn = db.connect(cfg.db_path)
+    sid = _resolve_ids(conn, [args.session])[0]
+    t = contextpack.build_session_transcript(conn, sid, include_tools=not args.no_tools, do_redact=not args.no_redact)
+    if args.out:
+        Path(args.out).write_text(t["markdown"], encoding="utf-8")
+        where = args.out
+    else:
+        where = str(contextpack.save_transcript(t["markdown"], cfg.exports_dir, sid, t["session"]["title"]))
+    if args.copy:
+        _to_clipboard(t["markdown"])
+    print(f"{t['messages']} messages, ≈{t['tokens']:,} tokens, {t['redactions']} redaction(s) → {where}"
+          + (" (also copied to the clipboard)" if args.copy else ""))
+
+
 def cmd_serve(cfg, args):
     from . import server
     if args.port:
@@ -430,6 +445,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--new-window", action="store_true", help="Resume in a new console window")
     s.add_argument("--print", action="store_true", help="Only print the command")
     s.set_defaults(fn=cmd_resume)
+
+    s = sub.add_parser("export", help="Write a whole session (from the index) as Markdown")
+    s.add_argument("session", help="Session id or unique prefix")
+    s.add_argument("--out", "-o", help="File to write (default: the exports folder)")
+    s.add_argument("--no-tools", action="store_true", help="Leave out tool calls and output")
+    s.add_argument("--no-redact", action="store_true")
+    s.add_argument("--copy", "-c", action="store_true", help="Also copy it to the clipboard")
+    s.set_defaults(fn=cmd_export)
 
     s = sub.add_parser("serve", help="Run the local web app")
     s.add_argument("--port", type=int)

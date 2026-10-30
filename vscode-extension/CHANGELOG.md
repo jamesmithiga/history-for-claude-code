@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.6
+
+- **Send whole session** puts the complete conversation (your messages and Claude's replies, nothing trimmed) into a new Claude chat. It reads from the extension's own copy, so it works even after Claude Code has deleted the transcript.
+  - Conversations up to about 25,000 tokens go straight into the chat; longer ones are saved to a file in `~/.claude-history/exports/` that Claude is asked to read.
+  - **Send with tool output** (under Details) includes every tool call and result. These are usually large, so they're always sent as a file.
+- In a browser: **Copy whole session** and **Save full transcript**.
+- CLI: `cch export <session>` writes a whole session as Markdown (`--no-tools`, `--copy`, `--out`).
+
 ## 0.2.5
 
 - A session's actions (Continue in chat, Bring into this chat, Terminal, Archive, Details) sit on their own row under the title, aligned left.
